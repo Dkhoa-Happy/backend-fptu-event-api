@@ -1,0 +1,39 @@
+services:
+  # Database cho môi trường development của hệ thống Event Registration & Ticketing
+  event-db:
+    image: postgres:13
+    container_name: fptu-event-db
+    restart: unless-stopped
+    ports:
+      - '5434:5432' # host:container
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: fptu_event_dev # DB chính cho dev (CRUD Event, Speaker/Venue, Ticket, Seat, Report...)
+    volumes:
+      - event-db-data:/var/lib/postgresql/data
+    networks:
+      - fptu-event-network
+
+  # Database cho môi trường test (chạy STC-01 → STC-05, workflow scenarios, v.v.)
+  event-test-db:
+    image: postgres:13
+    container_name: fptu-event-test-db
+    restart: unless-stopped
+    ports:
+      - '5435:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: fptu_event_test # DB riêng để chạy test: CRUD, Ticket Flow, Exception, Reporting
+    volumes:
+      - event-test-db-data:/var/lib/postgresql/data
+    networks:
+      - fptu-event-network
+
+networks:
+  fptu-event-network:
+
+volumes:
+  event-db-data:
+  event-test-db-data:
