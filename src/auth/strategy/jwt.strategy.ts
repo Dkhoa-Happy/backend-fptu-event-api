@@ -24,7 +24,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       return null;
     }
 
-    const { password: _password, ...safeUser } = user;
+    // Loại bỏ hash mật khẩu trước khi gắn vào request.user
+    const { passwordHash: _passwordHash, ...safeUser } = user;
     return safeUser;
   }
 }
