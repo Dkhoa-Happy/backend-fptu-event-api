@@ -10,10 +10,25 @@ export class UserService {
       where: { id: userId },
       select: {
         id: true,
+        userName: true,
         email: true,
-        fullName: true,
+        firstName: true,
+        lastName: true,
+        avatar: true,
+        phoneNumber: true,
+        gender: true,
+        address: true,
+        roleName: true,
+        isActive: true,
         createdAt: true,
-        updatedAt: true,
+        campus: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            address: true,
+          },
+        },
       },
     });
 
@@ -21,6 +36,8 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    return user;
+    return {
+      ...user,
+    };
   }
 }
