@@ -192,6 +192,7 @@ model Campus {
   code     String   @unique
   capacity Int?
   address  String?
+  status String
 
   // Quan hệ: 1 Campus -> Many Venues (Mandatory)
   venues Venue[]

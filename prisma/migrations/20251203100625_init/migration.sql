@@ -132,6 +132,7 @@ CREATE TABLE "campuses" (
     "code" TEXT NOT NULL,
     "capacity" INTEGER,
     "address" TEXT,
+    "status" TEXT NOT NULL,
 
     CONSTRAINT "campuses_pkey" PRIMARY KEY ("id")
 );
