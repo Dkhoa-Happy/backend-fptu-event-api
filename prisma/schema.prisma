@@ -188,10 +188,9 @@ model Seat {
 
 model Campus {
   id       Int      @id @default(autoincrement())
-  name     String
-  code     String
+  name     String   @unique
+  code     String   @unique
   capacity Int?
-  hasSeats Boolean? @map("has_seats") // Dựa theo hình ảnh ERD
   address  String?
 
   // Quan hệ: 1 Campus -> Many Venues (Mandatory)

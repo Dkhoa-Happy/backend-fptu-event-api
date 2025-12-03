@@ -1,4 +1,5 @@
-import { Controller, Get } from '@nestjs/common';
+import { CreateCampusDto } from './dto/createCampus.dto';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CampusService } from './campus.service';
 import { Public } from '../auth/decorator';
@@ -10,10 +11,15 @@ export class CampusController {
 
   @Get()
   @Public()
-  @ApiOperation({ summary: 'Get list of campuses (public)' })
-  async findAll() {
+  @ApiOperation({ summary: 'Lấy danh sách campus' })
+  findAll() {
     return this.campusService.findAll();
   }
+
+  @Post()
+  @Public()
+  @ApiOperation({ summary: 'Tạo thêm campus' })
+  createCampus(@Body() campus: CreateCampusDto) {
+    return this.campusService.createCampus(campus);
+  }
 }
-
-

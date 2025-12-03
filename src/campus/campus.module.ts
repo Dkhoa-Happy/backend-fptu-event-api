@@ -7,5 +7,3 @@ import { CampusService } from './campus.service';
   providers: [CampusService],
 })
 export class CampusModule {}
-
-
