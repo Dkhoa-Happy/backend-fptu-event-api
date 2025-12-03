@@ -131,7 +131,6 @@ CREATE TABLE "campuses" (
     "name" TEXT NOT NULL,
     "code" TEXT NOT NULL,
     "capacity" INTEGER,
-    "has_seats" BOOLEAN,
     "address" TEXT,
 
     CONSTRAINT "campuses_pkey" PRIMARY KEY ("id")
@@ -170,6 +169,12 @@ CREATE UNIQUE INDEX "users_student_code_key" ON "users"("student_code");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "campuses_name_key" ON "campuses"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "campuses_code_key" ON "campuses"("code");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "tickets_event_seat_unique" ON "tickets"("event_id", "seat_id");

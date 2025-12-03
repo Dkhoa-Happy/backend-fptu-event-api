@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { EventModule } from './event/event.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { SpeakerModule } from './speaker/speaker.module';
 import { CampusModule } from './campus/campus.module';
 
 @Module({
@@ -13,6 +14,7 @@ import { CampusModule } from './campus/campus.module';
     AuthModule,
     UserModule,
     EventModule,
+    SpeakerModule,
     CampusModule,
   ],
 })
