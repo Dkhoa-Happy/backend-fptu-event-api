@@ -50,6 +50,7 @@ export class EventSeeder implements Seeder {
         capacity: 500,
         hasSeats: false,
         campusId: campus.id,
+        status: 'Active',
       },
     });
 
@@ -102,5 +103,3 @@ export class EventSeeder implements Seeder {
     }
   }
 }
-
-

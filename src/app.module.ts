@@ -6,6 +6,7 @@ import { EventModule } from './event/event.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SpeakerModule } from './speaker/speaker.module';
 import { CampusModule } from './campus/campus.module';
+import { VenueModule } from './venue/venue.module';
 import { OrganizerModule } from './organizer/organizer.module';
 import { TicketModule } from './ticket/ticket.module';
 import { CheckinLogModule } from './checkin-log/checkin-log.module';
@@ -19,6 +20,7 @@ import { CheckinLogModule } from './checkin-log/checkin-log.module';
     EventModule,
     SpeakerModule,
     CampusModule,
+    VenueModule,
     OrganizerModule,
     TicketModule,
     CheckinLogModule,

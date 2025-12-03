@@ -30,4 +30,13 @@ export class CreateCampusDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @ApiProperty({
+    description: 'URL hình ảnh campus',
+    required: false,
+    example: 'https://example.com/campus.jpg',
+  })
+  @IsOptional()
+  @IsString()
+  image?: string;
 }
