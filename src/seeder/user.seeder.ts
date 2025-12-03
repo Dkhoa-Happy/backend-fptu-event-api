@@ -32,7 +32,7 @@ export class UserSeeder implements Seeder {
         phoneNumber: '0900000001',
         address: 'FPT University - Hồ Chí Minh',
         gender: true, // male
-        roleName: 'STAFF',
+        roleName: 'staff',
         campusId: campus.id,
         isActive: true,
       },
@@ -53,7 +53,7 @@ export class UserSeeder implements Seeder {
         phoneNumber: '0900000002',
         address: 'FPT University - Hồ Chí Minh',
         gender: true, // male
-        roleName: 'ORGANIZER',
+        roleName: 'event_organizer',
         campusId: campus.id,
         isActive: true,
       },
@@ -74,7 +74,7 @@ export class UserSeeder implements Seeder {
         phoneNumber: '0900000003',
         address: 'FPT University - Hồ Chí Minh',
         gender: false, // female
-        roleName: 'STUDENT',
+        roleName: 'student',
         campusId: campus.id,
         isActive: true,
       },
@@ -94,7 +94,7 @@ export class UserSeeder implements Seeder {
         phoneNumber: '0900000000',
         address: 'FPT University - Hồ Chí Minh',
         gender: true, // male
-        roleName: 'ADMIN',
+        roleName: 'admin',
         campusId: campus.id,
         isActive: true,
       },

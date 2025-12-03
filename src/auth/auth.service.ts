@@ -40,7 +40,7 @@ export class AuthService {
           passwordHash,
           firstName: firstName ?? '',
           lastName: lastName ?? '',
-          roleName: 'STUDENT',
+          roleName: 'student',
           campusId,
           studentCode,
           phoneNumber,
