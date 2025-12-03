@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateEventDto, UpdateEventDto, QueryEventDto } from './dto';
+import { CreateEventDto, UpdateEventDto, QueryEventDto, AssignStaffDto } from './dto';
 
 @Injectable()
 export class EventService {
@@ -392,5 +392,304 @@ export class EventService {
 
       throw error;
     }
+  }
+
+  async findAssignedEvents(staffId: number, query: QueryEventDto) {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      status,
+      organizerId,
+      venueId,
+    } = query;
+
+    const where: Prisma.EventWhereInput = {
+      eventStaffs: {
+        some: {
+          userId: staffId,
+        },
+      },
+    };
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (organizerId) {
+      where.organizerId = organizerId;
+    }
+
+    if (venueId) {
+      where.venueId = venueId;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.event.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              contactEmail: true,
+              logoUrl: true,
+            },
+          },
+          venue: {
+            select: {
+              id: true,
+              name: true,
+              location: true,
+              capacity: true,
+              hasSeats: true,
+            },
+          },
+          host: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.event.count({ where }),
+    ]);
+
+    return {
+      data: items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async assignStaff(
+    eventId: string,
+    dto: AssignStaffDto,
+    currentUser?: { userId?: number; roleName?: string },
+  ) {
+    // Check if event exists
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            ownerId: true,
+          },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Check permission: admin can assign to any event, event_organizer only to their own events
+    if (currentUser?.roleName === 'event_organizer' && currentUser.userId) {
+      if (
+        !event.organizer.ownerId ||
+        event.organizer.ownerId !== currentUser.userId
+      ) {
+        throw new ForbiddenException(
+          'You do not have permission to assign staff to this event',
+        );
+      }
+    }
+    // Admin can assign to any event, so no check needed
+
+    // Check if staff user exists and is a staff role
+    const staff = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+    });
+
+    if (!staff) {
+      throw new NotFoundException(`Staff with ID ${dto.userId} not found`);
+    }
+
+    if (staff.roleName !== 'staff') {
+      throw new BadRequestException(
+        `User with ID ${dto.userId} is not a staff member`,
+      );
+    }
+
+    try {
+      const eventStaff = await this.prisma.eventStaff.create({
+        data: {
+          eventId: eventId,
+          userId: dto.userId,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              roleName: true,
+            },
+          },
+          event: {
+            select: {
+              id: true,
+              title: true,
+              startTime: true,
+              endTime: true,
+            },
+          },
+        },
+      });
+
+      return eventStaff;
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          'This staff member is already assigned to this event',
+        );
+      }
+
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === 'P2003'
+      ) {
+        throw new NotFoundException('Event or User not found');
+      }
+
+      throw error;
+    }
+  }
+
+  async findMyEvents(organizerUserId: number, query: QueryEventDto) {
+    // Find organizers owned by this user
+    const organizers = await this.prisma.organizer.findMany({
+      where: {
+        ownerId: organizerUserId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const organizerIds = organizers.map((org) => org.id);
+
+    if (organizerIds.length === 0) {
+      return {
+        data: [],
+        meta: {
+          total: 0,
+          page: query.page || 1,
+          limit: query.limit || 10,
+          totalPages: 0,
+        },
+      };
+    }
+
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      status,
+      venueId,
+    } = query;
+
+    const where: Prisma.EventWhereInput = {
+      organizerId: {
+        in: organizerIds,
+      },
+    };
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (venueId) {
+      where.venueId = venueId;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.event.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              contactEmail: true,
+              logoUrl: true,
+            },
+          },
+          venue: {
+            select: {
+              id: true,
+              name: true,
+              location: true,
+              capacity: true,
+              hasSeats: true,
+            },
+          },
+          host: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.event.count({ where }),
+    ]);
+
+    return {
+      data: items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }
