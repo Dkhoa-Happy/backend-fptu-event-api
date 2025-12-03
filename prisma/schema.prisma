@@ -1,8 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// schema.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -13,24 +9,242 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  fullName  String?
-  events    Event[]  @relation("OrganizerEvents")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  userName     String   @unique @map("user_name")
+  passwordHash String   @map("password_hash")
+  avatar       String?
+  phoneNumber  String?  @map("phone_number")
+  gender       Boolean? @map("gender")
+  address      String?
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  studentCode  String?  @unique @map("student_code")
+  email        String   @unique
+  createdAt    DateTime @default(now()) @map("created_at")
+  isActive     Boolean  @default(true) @map("is_active")
+  roleName     String   @map("role_name")
+
+  // Quan hệ: Campus 1 mandatory to User
+  campusId Int    @map("campus_id")
+  campus   Campus @relation(fields: [campusId], references: [id])
+
+  // Quan hệ cũ
+  hostedEvents         Event[]           @relation("HostEvents")
+  organizerMemberships OrganizerMember[]
+
+  // Quan hệ mới: User mua Tickets
+  tickets Ticket[] @relation("UserTickets")
+
+  // Quan hệ mới: User là Staff thực hiện Check-in
+  checkinLogs CheckinLog[] @relation("StaffCheckins")
+
+  @@map("users")
+}
+
+// Bảng trung gian giữa User và Organizer (như trong hình)
+model OrganizerMember {
+  id       Int      @id @default(autoincrement())
+  role     String? // Ví dụ: Leader, Member...
+  isActive Boolean  @default(true) @map("is_active")
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  // FK
+  organizerId Int @map("organizer_id")
+  userId      Int @map("user_id")
+
+  // Quan hệ: Many Members -> 1 Organizer
+  organizer Organizer @relation(fields: [organizerId], references: [id])
+
+  // Quan hệ: Many Memberships -> 1 User
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("organizer_members")
+}
+
+model Organizer {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String?
+  contactEmail String?  @map("contact_email")
+  logoUrl      String?  @map("logo_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt
+
+  // Quan hệ: Campus 1 optional to Organizer
+  campusId Int?    @map("campus_id")
+  campus   Campus? @relation(fields: [campusId], references: [id])
+
+  members OrganizerMember[]
+  events  Event[]
+
+  @@map("organizers")
 }
 
 model Event {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?
-  startTime   DateTime
-  endTime     DateTime
-  location    String?
-  organizer   User     @relation("OrganizerEvents", fields: [organizerId], references: [id])
-  organizerId Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                Int      @id @default(autoincrement())
+  title             String
+  description       String?
+  bannerUrl         String?  @map("banner_url")
+  startTimeRegister DateTime @map("start_time_register")
+  endTimeRegister   DateTime @map("end_time_register")
+  startTime         DateTime @map("start_time")
+  endTime           DateTime @map("end_time")
+  status            String
+  maxCapacity       Int?     @map("max_capacity")
+  registeredCount   Int      @default(0) @map("registered_count")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Host và Organizer (Giữ nguyên)
+  hostId      Int       @map("host_id")
+  host        User      @relation("HostEvents", fields: [hostId], references: [id])
+  organizerId Int       @map("organizer_id")
+  organizer   Organizer @relation(fields: [organizerId], references: [id])
+
+  // Quan hệ: Events -> Venues
+  // Theo hình vẽ có ký hiệu tròn (o) nên quan hệ này là Optional (Event có thể chưa có Venue hoặc Online)
+  venueId Int?   @map("venue_id")
+  venue   Venue? @relation(fields: [venueId], references: [id])
+
+  tickets Ticket[]
+
+  // Quan hệ khác
+  feedbacks     Feedback[]
+  eventSpeakers EventSpeaker[]
+
+  @@map("events")
+}
+
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Quan hệ: Many Feedbacks -> 1 Event
+  eventId Int   @map("event_id")
+  event   Event @relation(fields: [eventId], references: [id])
+
+  @@map("feedbacks")
+}
+
+model EventSpeaker {
+  id        Int     @id @default(autoincrement())
+  topic     String?
+  speakerId Int     @map("speaker_id")
+  eventId   Int     @map("event_id")
+
+  speaker Speaker @relation(fields: [speakerId], references: [id])
+  event   Event   @relation(fields: [eventId], references: [id]) // Đã xóa dòng duplicate
+
+  @@map("event_speakers")
+}
+
+model Speaker {
+  id            Int            @id @default(autoincrement())
+  name          String
+  bio           String?
+  avatar        String?
+  type          String
+  company       String?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  eventSpeakers EventSpeaker[]
+
+  @@map("speakers")
+}
+
+model Venue {
+  id          Int     @id @default(autoincrement())
+  name        String
+  location    String
+  capacity    Int
+  hasSeats    Boolean @map("has_seats")
+  mapImageUrl String? @map("map_image_url")
+
+  // Quan hệ: Campus 1 mandatory to Venue (Sửa từ Int? thành Int)
+  campusId Int    @map("campus_id")
+  campus   Campus @relation(fields: [campusId], references: [id])
+
+  events Event[]
+  seats  Seat[]
+
+  @@map("venues")
+}
+
+model Seat {
+  id          Int     @id @default(autoincrement())
+  rowLabel    String  @map("row_label")
+  numberLabel String  @map("number_label")
+  seatType    String  @map("seat_type")
+  isActive    Boolean @default(true) @map("is_active")
+
+  venueId Int   @map("venue_id")
+  venue   Venue @relation(fields: [venueId], references: [id])
+
+  // Quan hệ mới: Seat có thể được book bởi Ticket
+  tickets Ticket[]
+
+  @@map("seats")
+}
+
+model Campus {
+  id       Int      @id @default(autoincrement())
+  name     String
+  code     String
+  capacity Int?
+  hasSeats Boolean? @map("has_seats") // Dựa theo hình ảnh ERD
+  address  String?
+
+  // Quan hệ: 1 Campus -> Many Venues (Mandatory)
+  venues Venue[]
+
+  // Quan hệ: 1 Campus -> Many Users (Mandatory)
+  users User[]
+
+  // Quan hệ: 1 Campus -> Many Organizers (Optional)
+  organizers Organizer[]
+
+  @@map("campuses")
+}
+
+model Ticket {
+  id           Int       @id @default(autoincrement())
+  qrCode       String    @map("qr_code")
+  ticketStatus String    @map("ticket_status")
+  bookingDate  DateTime  @default(now()) @map("booking_date")
+  checkinTime  DateTime? @map("checkin_time")
+
+  // Quan hệ: Tickets many mandatory to 1 optional Event
+  eventId Int?   @map("event_id")
+  event   Event? @relation(fields: [eventId], references: [id])
+
+  // Quan hệ: Tickets many mandatory to 1 optional User (Người mua)
+  userId Int?  @map("user_id")
+  user   User? @relation("UserTickets", fields: [userId], references: [id])
+
+  // Quan hệ: Tickets 1 optional to many mandatory Seats (Một vé gắn với 1 ghế)
+  seatId Int?  @map("seat_id")
+  seat   Seat? @relation(fields: [seatId], references: [id])
+
+  // Quan hệ: 1 Ticket -> Many CheckinLogs
+  checkinLogs CheckinLog[]
+
+  // Đảm bảo mỗi (event, seat) chỉ có tối đa 1 Ticket
+  @@unique([eventId, seatId], map: "tickets_event_seat_unique")
+  @@map("tickets")
+}
+
+model CheckinLog {
+  id        Int      @id @default(autoincrement())
+  scannedAt DateTime @default(now()) @map("scanned_at")
+  result    String
+
+  // Quan hệ: CheckinLogs many mandatory to 1 optional Tickets
+  ticketId Int?    @map("ticket_id")
+  ticket   Ticket? @relation(fields: [ticketId], references: [id])
+
+  // Quan hệ: CheckinLogs many mandatory to 1 optional User (Staff thực hiện scan)
+  staffId Int?  @map("staff_id")
+  staff   User? @relation("StaffCheckins", fields: [staffId], references: [id])
+
+  @@map("checkin_logs")
 }
