@@ -1,3 +1,15 @@
+-- CreateEnum
+CREATE TYPE "UserRole" AS ENUM ('student', 'admin', 'staff', 'event_organizer');
+
+-- CreateEnum
+CREATE TYPE "EventStatus" AS ENUM ('DRAFT', 'PENDING', 'PUBLISHED', 'CANCELED');
+
+-- CreateEnum
+CREATE TYPE "TicketStatus" AS ENUM ('VALID', 'USED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "CheckinResult" AS ENUM ('SUCCESS', 'FAIL');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" SERIAL NOT NULL,
@@ -13,22 +25,10 @@ CREATE TABLE "users" (
     "email" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
-    "role_name" TEXT NOT NULL,
+    "role_name" "UserRole" NOT NULL,
     "campus_id" INTEGER NOT NULL,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "organizer_members" (
-    "id" SERIAL NOT NULL,
-    "role" TEXT,
-    "is_active" BOOLEAN NOT NULL DEFAULT true,
-    "joined_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "organizer_id" INTEGER NOT NULL,
-    "user_id" INTEGER NOT NULL,
-
-    CONSTRAINT "organizer_members_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -41,13 +41,14 @@ CREATE TABLE "organizers" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "campus_id" INTEGER,
+    "owner_id" INTEGER,
 
     CONSTRAINT "organizers_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "events" (
-    "id" SERIAL NOT NULL,
+    "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
     "banner_url" TEXT,
@@ -55,9 +56,10 @@ CREATE TABLE "events" (
     "end_time_register" TIMESTAMP(3) NOT NULL,
     "start_time" TIMESTAMP(3) NOT NULL,
     "end_time" TIMESTAMP(3) NOT NULL,
-    "status" TEXT NOT NULL,
-    "max_capacity" INTEGER,
+    "status" "EventStatus" NOT NULL DEFAULT 'DRAFT',
+    "max_capacity" INTEGER NOT NULL,
     "registered_count" INTEGER NOT NULL DEFAULT 0,
+    "allow_check_in" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "host_id" INTEGER NOT NULL,
     "organizer_id" INTEGER NOT NULL,
@@ -72,7 +74,7 @@ CREATE TABLE "feedbacks" (
     "rating" INTEGER NOT NULL,
     "comment" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "event_id" INTEGER NOT NULL,
+    "event_id" TEXT NOT NULL,
 
     CONSTRAINT "feedbacks_pkey" PRIMARY KEY ("id")
 );
@@ -82,7 +84,7 @@ CREATE TABLE "event_speakers" (
     "id" SERIAL NOT NULL,
     "topic" TEXT,
     "speaker_id" INTEGER NOT NULL,
-    "event_id" INTEGER NOT NULL,
+    "event_id" TEXT NOT NULL,
 
     CONSTRAINT "event_speakers_pkey" PRIMARY KEY ("id")
 );
@@ -139,13 +141,13 @@ CREATE TABLE "campuses" (
 
 -- CreateTable
 CREATE TABLE "tickets" (
-    "id" SERIAL NOT NULL,
+    "id" TEXT NOT NULL,
     "qr_code" TEXT NOT NULL,
-    "ticket_status" TEXT NOT NULL,
+    "status" "TicketStatus" NOT NULL DEFAULT 'VALID',
     "booking_date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "checkin_time" TIMESTAMP(3),
-    "event_id" INTEGER,
-    "user_id" INTEGER,
+    "event_id" TEXT NOT NULL,
+    "user_id" INTEGER NOT NULL,
     "seat_id" INTEGER,
 
     CONSTRAINT "tickets_pkey" PRIMARY KEY ("id")
@@ -154,12 +156,23 @@ CREATE TABLE "tickets" (
 -- CreateTable
 CREATE TABLE "checkin_logs" (
     "id" SERIAL NOT NULL,
-    "scanned_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "result" TEXT NOT NULL,
-    "ticket_id" INTEGER,
-    "staff_id" INTEGER,
+    "checkin_time" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "result" "CheckinResult" NOT NULL,
+    "message" TEXT,
+    "ticket_id" TEXT NOT NULL,
+    "staff_id" INTEGER NOT NULL,
 
     CONSTRAINT "checkin_logs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "event_staffs" (
+    "id" SERIAL NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "event_id" TEXT NOT NULL,
+    "user_id" INTEGER NOT NULL,
+
+    CONSTRAINT "event_staffs_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -172,19 +185,28 @@ CREATE UNIQUE INDEX "users_student_code_key" ON "users"("student_code");
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "tickets_qr_code_key" ON "tickets"("qr_code");
+
+-- CreateIndex
+CREATE INDEX "tickets_qr_code_idx" ON "tickets"("qr_code");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tickets_user_event_unique" ON "tickets"("user_id", "event_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "tickets_event_seat_unique" ON "tickets"("event_id", "seat_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "event_staffs_event_id_user_id_key" ON "event_staffs"("event_id", "user_id");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_campus_id_fkey" FOREIGN KEY ("campus_id") REFERENCES "campuses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "organizer_members" ADD CONSTRAINT "organizer_members_organizer_id_fkey" FOREIGN KEY ("organizer_id") REFERENCES "organizers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "organizer_members" ADD CONSTRAINT "organizer_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "organizers" ADD CONSTRAINT "organizers_campus_id_fkey" FOREIGN KEY ("campus_id") REFERENCES "campuses"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "organizers" ADD CONSTRAINT "organizers_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "events" ADD CONSTRAINT "events_host_id_fkey" FOREIGN KEY ("host_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -211,16 +233,22 @@ ALTER TABLE "venues" ADD CONSTRAINT "venues_campus_id_fkey" FOREIGN KEY ("campus
 ALTER TABLE "seats" ADD CONSTRAINT "seats_venue_id_fkey" FOREIGN KEY ("venue_id") REFERENCES "venues"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tickets" ADD CONSTRAINT "tickets_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "tickets" ADD CONSTRAINT "tickets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tickets" ADD CONSTRAINT "tickets_seat_id_fkey" FOREIGN KEY ("seat_id") REFERENCES "seats"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "checkin_logs" ADD CONSTRAINT "checkin_logs_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "checkin_logs" ADD CONSTRAINT "checkin_logs_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "checkin_logs" ADD CONSTRAINT "checkin_logs_staff_id_fkey" FOREIGN KEY ("staff_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "checkin_logs" ADD CONSTRAINT "checkin_logs_staff_id_fkey" FOREIGN KEY ("staff_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_staffs" ADD CONSTRAINT "event_staffs_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_staffs" ADD CONSTRAINT "event_staffs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

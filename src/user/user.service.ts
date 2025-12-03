@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import type { Prisma } from '@prisma/client';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateUserDto,
@@ -184,7 +185,7 @@ export class UserService {
   async getStaffs(query: QueryUserDto) {
     return this.getUsers({
       ...query,
-      roleName: 'STAFF',
+      roleName: UserRole.staff,
     });
   }
 

@@ -1,16 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsBooleanString,
   IsEnum,
   IsInt,
   IsOptional,
   IsString,
   Min,
 } from 'class-validator';
-import { UserRole } from '@prisma/client';
+import { CheckinResult } from '@prisma/client';
 
-export class QueryUserDto {
+export class QueryCheckinLogDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
   @Type(() => Number)
   @IsInt()
@@ -26,31 +25,29 @@ export class QueryUserDto {
   limit?: number = 10;
 
   @ApiPropertyOptional({
-    example: 'staff',
-    description: 'Search by name, username or email',
+    example: CheckinResult.SUCCESS,
+    enum: CheckinResult,
+    description: 'Filter by check-in result',
+  })
+  @IsOptional()
+  @IsEnum(CheckinResult)
+  result?: CheckinResult;
+
+  @ApiPropertyOptional({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Filter by ticket ID (UUID)',
   })
   @IsOptional()
   @IsString()
-  search?: string;
+  ticketId?: string;
 
   @ApiPropertyOptional({
-    example: UserRole.staff,
-    enum: UserRole,
+    example: 1,
+    description: 'Filter by staff ID',
   })
-  @IsOptional()
-  @IsEnum(UserRole)
-  roleName?: UserRole;
-
-  @ApiPropertyOptional({ example: 'true' })
-  @IsOptional()
-  @IsBooleanString()
-  isActive?: string;
-
-  @ApiPropertyOptional({ example: 1 })
   @Type(() => Number)
   @IsOptional()
   @IsInt()
-  campusId?: number;
+  staffId?: number;
 }
-
 

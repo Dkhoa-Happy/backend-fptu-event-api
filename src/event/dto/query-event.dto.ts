@@ -8,9 +8,9 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { UserRole } from '@prisma/client';
+import { EventStatus } from '@prisma/client';
 
-export class QueryUserDto {
+export class QueryEventDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
   @Type(() => Number)
   @IsInt()
@@ -26,31 +26,38 @@ export class QueryUserDto {
   limit?: number = 10;
 
   @ApiPropertyOptional({
-    example: 'staff',
-    description: 'Search by name, username or email',
+    example: 'tech conference',
+    description: 'Search by title or description',
   })
   @IsOptional()
   @IsString()
   search?: string;
 
   @ApiPropertyOptional({
-    example: UserRole.staff,
-    enum: UserRole,
+    example: EventStatus.PUBLISHED,
+    enum: EventStatus,
+    description: 'Filter by event status',
   })
   @IsOptional()
-  @IsEnum(UserRole)
-  roleName?: UserRole;
+  @IsEnum(EventStatus)
+  status?: EventStatus;
 
-  @ApiPropertyOptional({ example: 'true' })
-  @IsOptional()
-  @IsBooleanString()
-  isActive?: string;
-
-  @ApiPropertyOptional({ example: 1 })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Filter by organizer ID',
+  })
   @Type(() => Number)
   @IsOptional()
   @IsInt()
-  campusId?: number;
-}
+  organizerId?: number;
 
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Filter by venue ID',
+  })
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  venueId?: number;
+}
 
