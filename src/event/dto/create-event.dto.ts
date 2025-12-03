@@ -81,6 +81,16 @@ export class CreateEventDto {
   @IsBoolean()
   allowCheckIn?: boolean;
 
+  @ApiPropertyOptional({
+    example: true,
+    default: false,
+    description:
+      'If true, event is visible to students of all campuses. If false, only students from the event campus can see/register.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isGlobal?: boolean;
+
   @ApiProperty({ example: 1, description: 'ID of the organizer' })
   @Type(() => Number)
   @IsInt()

@@ -106,6 +106,9 @@ model Event {
   maxCapacity       Int         @map("max_capacity")
   registeredCount   Int         @default(0) @map("registered_count")
   allowCheckIn      Boolean     @default(false) @map("allow_check_in")
+  /// Nếu true: sự kiện public toàn hệ thống (mọi campus đều thấy/join được)
+  /// Nếu false: chỉ sinh viên thuộc campus của sự kiện mới thấy (dựa vào campus của venue)
+  isGlobal          Boolean     @default(false) @map("is_global")
   createdAt         DateTime    @default(now()) @map("created_at")
 
   // Host và Organizer (Giữ nguyên)

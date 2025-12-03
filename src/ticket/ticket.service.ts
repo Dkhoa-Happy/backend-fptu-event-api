@@ -6,18 +6,23 @@ import {
 import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTicketDto, UpdateTicketDto, QueryTicketDto } from './dto';
+import {
+  CreateTicketDto,
+  UpdateTicketDto,
+  QueryTicketDto,
+  QueryMyTicketDto,
+} from './dto';
 import { CheckinResult } from '@prisma/client';
 
 @Injectable()
 export class TicketService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateTicketDto) {
+  async create(dto: CreateTicketDto, userId: number) {
     // Check if user already has a ticket for this event
     const existingTicket = await this.prisma.ticket.findFirst({
       where: {
-        userId: dto.userId,
+        userId,
         eventId: dto.eventId,
       },
     });
@@ -55,7 +60,7 @@ export class TicketService {
       const ticket = await this.prisma.ticket.create({
         data: {
           qrCode: qrCode!,
-          userId: dto.userId,
+          userId,
           eventId: dto.eventId,
           status: 'VALID',
         },
@@ -206,6 +211,63 @@ export class TicketService {
     }
 
     return ticket;
+  }
+
+  async findMyTickets(userId: number, query: QueryMyTicketDto) {
+    const { page = 1, limit = 10, status, eventId } = query;
+
+    const where: Prisma.TicketWhereInput = {
+      userId,
+    };
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (eventId) {
+      where.eventId = eventId;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { bookingDate: 'desc' },
+        include: {
+          event: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              startTime: true,
+              endTime: true,
+              status: true,
+              organizer: {
+                select: {
+                  id: true,
+                  name: true,
+                  logoUrl: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.ticket.count({ where }),
+    ]);
+
+    return {
+      data: items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findByQrCode(qrCode: string) {

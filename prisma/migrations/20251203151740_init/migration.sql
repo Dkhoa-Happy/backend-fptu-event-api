@@ -60,6 +60,7 @@ CREATE TABLE "events" (
     "max_capacity" INTEGER NOT NULL,
     "registered_count" INTEGER NOT NULL DEFAULT 0,
     "allow_check_in" BOOLEAN NOT NULL DEFAULT false,
+    "is_global" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "host_id" INTEGER NOT NULL,
     "organizer_id" INTEGER NOT NULL,

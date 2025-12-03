@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -25,6 +26,7 @@ export class EventService {
           status: dto.status || 'DRAFT',
           maxCapacity: dto.maxCapacity,
           allowCheckIn: dto.allowCheckIn ?? false,
+          isGlobal: dto.isGlobal ?? false,
           organizerId: dto.organizerId,
           venueId: dto.venueId,
           // Note: hostId is required in schema but not in DTO - you may want to add it
@@ -76,7 +78,10 @@ export class EventService {
     }
   }
 
-  async findAll(query: QueryEventDto) {
+  async findAll(
+    query: QueryEventDto,
+    currentUser?: { roleName?: string; campusId?: number },
+  ) {
     const {
       page = 1,
       limit = 10,
@@ -105,6 +110,36 @@ export class EventService {
 
     if (venueId) {
       where.venueId = venueId;
+    }
+
+    // Nếu là student: chỉ được thấy event global hoặc event thuộc campus của mình
+    if (currentUser?.roleName === 'student' && currentUser.campusId) {
+      const visibilityCondition: Prisma.EventWhereInput = {
+        OR: [{ isGlobal: true }, { venue: { campusId: currentUser.campusId } }],
+      };
+
+      if (where.AND) {
+        where.AND = Array.isArray(where.AND)
+          ? [...where.AND, visibilityCondition]
+          : [where.AND, visibilityCondition];
+      } else {
+        where.AND = [visibilityCondition];
+      }
+    }
+
+    // Nếu là staff: cũng chỉ thấy event global hoặc event thuộc campus của mình
+    if (currentUser?.roleName === 'staff' && currentUser.campusId) {
+      const visibilityCondition: Prisma.EventWhereInput = {
+        OR: [{ isGlobal: true }, { venue: { campusId: currentUser.campusId } }],
+      };
+
+      if (where.AND) {
+        where.AND = Array.isArray(where.AND)
+          ? [...where.AND, visibilityCondition]
+          : [where.AND, visibilityCondition];
+      } else {
+        where.AND = [visibilityCondition];
+      }
     }
 
     const skip = (page - 1) * limit;
@@ -159,7 +194,10 @@ export class EventService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(
+    id: string,
+    currentUser?: { roleName?: string; campusId?: number },
+  ) {
     const event = await this.prisma.event.findUnique({
       where: { id },
       include: {
@@ -179,6 +217,7 @@ export class EventService {
             location: true,
             capacity: true,
             hasSeats: true,
+            campusId: true,
           },
         },
         host: {
@@ -195,6 +234,28 @@ export class EventService {
 
     if (!event) {
       throw new NotFoundException(`Event with ID ${id} not found`);
+    }
+
+    // Nếu là student: kiểm tra quyền xem event
+    if (currentUser?.roleName === 'student' && currentUser.campusId) {
+      const isSameCampus =
+        event.venue && event.venue.campusId === currentUser.campusId;
+      if (!event.isGlobal && !isSameCampus) {
+        throw new ForbiddenException(
+          'You do not have permission to access this event',
+        );
+      }
+    }
+
+    // Nếu là staff: kiểm tra quyền xem event theo campus
+    if (currentUser?.roleName === 'staff' && currentUser.campusId) {
+      const isSameCampus =
+        event.venue && event.venue.campusId === currentUser.campusId;
+      if (!event.isGlobal && !isSameCampus) {
+        throw new ForbiddenException(
+          'You do not have permission to access this event',
+        );
+      }
     }
 
     return event;
@@ -214,7 +275,8 @@ export class EventService {
       const updateData: Prisma.EventUncheckedUpdateInput = {};
 
       if (dto.title !== undefined) updateData.title = dto.title;
-      if (dto.description !== undefined) updateData.description = dto.description;
+      if (dto.description !== undefined)
+        updateData.description = dto.description;
       if (dto.bannerUrl !== undefined) updateData.bannerUrl = dto.bannerUrl;
       if (dto.startTime !== undefined)
         updateData.startTime = new Date(dto.startTime);
@@ -224,7 +286,8 @@ export class EventService {
       if (dto.endTimeRegister !== undefined)
         updateData.endTimeRegister = new Date(dto.endTimeRegister);
       if (dto.status !== undefined) updateData.status = dto.status;
-      if (dto.maxCapacity !== undefined) updateData.maxCapacity = dto.maxCapacity;
+      if (dto.maxCapacity !== undefined)
+        updateData.maxCapacity = dto.maxCapacity;
       if (dto.allowCheckIn !== undefined)
         updateData.allowCheckIn = dto.allowCheckIn;
       if (dto.organizerId !== undefined)
@@ -331,4 +394,3 @@ export class EventService {
     }
   }
 }
-

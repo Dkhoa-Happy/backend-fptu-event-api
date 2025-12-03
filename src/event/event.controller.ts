@@ -19,7 +19,7 @@ import {
 import { EventService } from './event.service';
 import { CreateEventDto, UpdateEventDto, QueryEventDto } from './dto';
 import { JwtGuard, RolesGuard } from '../auth/guard';
-import { Roles } from '../auth/decorator';
+import { GetUser, Roles } from '../auth/decorator';
 import { UserRole } from '@prisma/client';
 
 @ApiTags('events')
@@ -70,8 +70,8 @@ export class EventController {
     description:
       'Forbidden. Required roles: admin, staff, event_organizer, student',
   })
-  async findAll(@Query() query: QueryEventDto) {
-    return this.eventService.findAll(query);
+  async findAll(@Query() query: QueryEventDto, @GetUser() user: any) {
+    return this.eventService.findAll(query, user);
   }
 
   @Get(':id')
@@ -97,8 +97,8 @@ export class EventController {
     description:
       'Forbidden. Required roles: admin, staff, event_organizer, student',
   })
-  async findOne(@Param('id') id: string) {
-    return this.eventService.findOne(id);
+  async findOne(@Param('id') id: string, @GetUser() user: any) {
+    return this.eventService.findOne(id, user);
   }
 
   @Put(':id')

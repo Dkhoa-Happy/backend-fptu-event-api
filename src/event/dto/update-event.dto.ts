@@ -89,6 +89,15 @@ export class UpdateEventDto {
   allowCheckIn?: boolean;
 
   @ApiPropertyOptional({
+    example: true,
+    description:
+      'If true, event is visible to students of all campuses. If false, only students from the event campus can see/register.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isGlobal?: boolean;
+
+  @ApiPropertyOptional({
     example: 2,
     description: 'ID of the organizer',
   })
