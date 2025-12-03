@@ -159,6 +159,7 @@ model Venue {
   capacity    Int
   hasSeats    Boolean @map("has_seats")
   mapImageUrl String? @map("map_image_url")
+  status String 
 
   // Quan hệ: Campus 1 mandatory to Venue (Sửa từ Int? thành Int)
   campusId Int    @map("campus_id")
@@ -192,7 +193,8 @@ model Campus {
   code     String   @unique
   capacity Int?
   address  String?
-  status String
+  image    String?
+  status   String
 
   // Quan hệ: 1 Campus -> Many Venues (Mandatory)
   venues Venue[]

@@ -38,6 +38,13 @@ export class CampusController {
     return this.campusService.getCampusById(parseInt(id));
   }
 
+  @Get(':id/venues')
+  @Public()
+  @ApiOperation({ summary: 'Lấy danh sách venues của campus' })
+  getVenuesByCampusId(@Param('id') id: string) {
+    return this.campusService.getVenuesByCampusId(parseInt(id));
+  }
+
   @Post()
   @Public()
   @ApiOperation({ summary: 'Tạo thêm campus' })

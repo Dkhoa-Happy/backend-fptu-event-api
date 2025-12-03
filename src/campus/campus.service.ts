@@ -15,6 +15,7 @@ export class CampusService {
         code: true,
         capacity: true,
         address: true,
+        image: true,
         status: true,
         venues: {
           select: {
@@ -33,7 +34,7 @@ export class CampusService {
     });
   }
   async createCampus(campus: CreateCampusDto) {
-    const { name, code, capacity, address } = campus;
+    const { name, code, capacity, address, image } = campus;
     try {
       const response = await this.prisma.campus.create({
         data: {
@@ -41,6 +42,7 @@ export class CampusService {
           code,
           capacity,
           address,
+          image,
           status: 'Active',
         },
       });
@@ -69,6 +71,7 @@ export class CampusService {
           code: true,
           capacity: true,
           address: true,
+          image: true,
           status: true,
           venues: {
             select: {
@@ -156,6 +159,40 @@ export class CampusService {
         throw new BadRequestException(error.message);
       }
       throw new BadRequestException('Lỗi khi xóa campus');
+    }
+  }
+
+  async getVenuesByCampusId(id: number) {
+    try {
+      const campus = await this.prisma.campus.findUnique({
+        where: { id },
+      });
+      if (!campus) {
+        throw new BadRequestException('Campus không tồn tại');
+      }
+      const venues = await this.prisma.venue.findMany({
+        where: { campusId: id },
+        select: {
+          id: true,
+          name: true,
+          location: true,
+          capacity: true,
+          hasSeats: true,
+          mapImageUrl: true,
+        },
+        orderBy: {
+          id: 'asc',
+        },
+      });
+      return venues;
+    } catch (error: unknown) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw new BadRequestException('Lỗi khi lấy venues');
     }
   }
 }

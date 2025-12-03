@@ -108,6 +108,7 @@ CREATE TABLE "venues" (
     "capacity" INTEGER NOT NULL,
     "has_seats" BOOLEAN NOT NULL,
     "map_image_url" TEXT,
+    "status" TEXT NOT NULL,
     "campus_id" INTEGER NOT NULL,
 
     CONSTRAINT "venues_pkey" PRIMARY KEY ("id")
@@ -132,6 +133,7 @@ CREATE TABLE "campuses" (
     "code" TEXT NOT NULL,
     "capacity" INTEGER,
     "address" TEXT,
+    "image" TEXT,
     "status" TEXT NOT NULL,
 
     CONSTRAINT "campuses_pkey" PRIMARY KEY ("id")
