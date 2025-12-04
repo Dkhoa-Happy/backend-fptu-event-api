@@ -36,7 +36,8 @@ enum CheckinResult {
 model User {
   id           Int      @id @default(autoincrement())
   userName     String   @unique @map("user_name")
-  passwordHash String   @map("password_hash")
+  passwordHash String?  @map("password_hash")
+  googleId     String?  @unique @map("google_id")
   avatar       String?
   phoneNumber  String?  @map("phone_number")
   gender       Boolean? @map("gender")
@@ -207,12 +208,12 @@ model Seat {
 }
 
 model Campus {
-  id       Int      @id @default(autoincrement())
-  name     String   @unique
-  code     String   @unique
+  id       Int     @id @default(autoincrement())
+  name     String  @unique
+  code     String  @unique
   capacity Int?
   address  String?
-  status String
+  status   String
 
   // Quan hệ: 1 Campus -> Many Venues (Mandatory)
   venues Venue[]

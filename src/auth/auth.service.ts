@@ -77,6 +77,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // User đăng nhập bằng Google không có passwordHash
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        'This account uses Google login. Please use Google to sign in.',
+      );
+    }
+
     try {
       const isValidPassword = await argon2.verify(user.passwordHash, password);
       if (!isValidPassword) {
@@ -93,6 +100,88 @@ export class AuthService {
     };
   }
 
+  async validateGoogleUser(googleUser: {
+    googleId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    avatar: string | null;
+  }) {
+    const { googleId, email, firstName, lastName, avatar } = googleUser;
+
+    // Tìm user theo googleId hoặc email
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ googleId }, { email }],
+      },
+    });
+
+    if (user) {
+      // User đã tồn tại - cập nhật thông tin Google nếu cần
+      if (!user.googleId) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleId,
+            avatar: avatar || user.avatar,
+            firstName: firstName || user.firstName,
+            lastName: lastName || user.lastName,
+          },
+        });
+      } else {
+        // Cập nhật avatar nếu có
+        if (avatar && avatar !== user.avatar) {
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: { avatar },
+          });
+        }
+      }
+    } else {
+      // User mới - tạo account mới
+      // Lấy campus đầu tiên làm mặc định (hoặc bạn có thể yêu cầu user chọn)
+      const defaultCampus = await this.prisma.campus.findFirst({
+        where: { status: 'Active' },
+        orderBy: { id: 'asc' },
+      });
+
+      if (!defaultCampus) {
+        throw new UnauthorizedException(
+          'No active campus found. Please contact administrator.',
+        );
+      }
+
+      // Tạo userName từ email (phần trước @)
+      const userNameBase = email.split('@')[0];
+      let userName = userNameBase;
+      let counter = 1;
+
+      // Đảm bảo userName là unique
+      while (await this.prisma.user.findUnique({ where: { userName } })) {
+        userName = `${userNameBase}${counter}`;
+        counter++;
+      }
+
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          googleId,
+          userName,
+          firstName: firstName || '',
+          lastName: lastName || '',
+          avatar,
+          roleName: 'student',
+          campusId: defaultCampus.id,
+        },
+      });
+    }
+
+    return {
+      message: 'Google login successfully',
+      accessToken: this.signToken(user.id, user.email, user.roleName),
+    };
+  }
+
   private signToken(userId: number, email: string, roleName: string) {
     const payload = {
       sub: userId,
@@ -103,7 +192,7 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  private excludePassword<T extends { passwordHash?: string }>(user: T) {
+  private excludePassword<T extends { passwordHash?: string | null }>(user: T) {
     const { passwordHash: _password, ...rest } = user;
     return rest;
   }

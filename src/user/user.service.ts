@@ -302,7 +302,7 @@ export class UserService {
     return this.excludePassword(user);
   }
 
-  private excludePassword<T extends { passwordHash?: string }>(user: T) {
+  private excludePassword<T extends { passwordHash?: string | null }>(user: T) {
     const { passwordHash: _password, ...rest } = user;
     return rest;
   }

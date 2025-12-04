@@ -14,7 +14,8 @@ CREATE TYPE "CheckinResult" AS ENUM ('SUCCESS', 'FAIL');
 CREATE TABLE "users" (
     "id" SERIAL NOT NULL,
     "user_name" TEXT NOT NULL,
-    "password_hash" TEXT NOT NULL,
+    "password_hash" TEXT,
+    "google_id" TEXT,
     "avatar" TEXT,
     "phone_number" TEXT,
     "gender" BOOLEAN,
@@ -178,6 +179,9 @@ CREATE TABLE "event_staffs" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_user_name_key" ON "users"("user_name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_google_id_key" ON "users"("google_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_student_code_key" ON "users"("student_code");
