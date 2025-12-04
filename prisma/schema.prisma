@@ -187,7 +187,6 @@ model Venue {
   location    String
   row Int
   column Int
-  capacity Int
   hasSeats    Boolean @map("has_seats")
   mapImageUrl String? @map("map_image_url")
   status String 
