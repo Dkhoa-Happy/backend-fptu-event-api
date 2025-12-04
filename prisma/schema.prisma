@@ -54,6 +54,7 @@ model User {
   email            String     @unique
   studentCardImage String?    @map("student_card_image")
   status           UserStatus @default(PENDING) @map("status")
+  refreshTokenHash String?    @map("refresh_token_hash")
   createdAt        DateTime   @default(now()) @map("created_at")
   isActive         Boolean    @default(true) @map("is_active")
   roleName         UserRole   @map("role_name")
@@ -185,11 +186,11 @@ model Venue {
   id          Int     @id @default(autoincrement())
   name        String
   location    String
-  row Int
-  column Int
+  row         Int
+  column      Int
   hasSeats    Boolean @map("has_seats")
   mapImageUrl String? @map("map_image_url")
-  status String 
+  status      String
 
   // Quan hệ: Campus 1 mandatory to Venue (Sửa từ Int? thành Int)
   campusId Int    @map("campus_id")
@@ -202,11 +203,11 @@ model Venue {
 }
 
 model Seat {
-  id          Int     @id @default(autoincrement())
-  rowLabel    String  @map("row_label")
-  colLabel Int  @map("col_label")
-  seatType    String  @map("seat_type")
-  isActive    Boolean @default(true) @map("is_active")
+  id       Int     @id @default(autoincrement())
+  rowLabel String  @map("row_label")
+  colLabel Int     @map("col_label")
+  seatType String  @map("seat_type")
+  isActive Boolean @default(true) @map("is_active")
 
   venueId Int   @map("venue_id")
   venue   Venue @relation(fields: [venueId], references: [id])
