@@ -185,9 +185,12 @@ model Venue {
   id          Int     @id @default(autoincrement())
   name        String
   location    String
-  capacity    Int
+  row Int
+  column Int
+  capacity Int
   hasSeats    Boolean @map("has_seats")
   mapImageUrl String? @map("map_image_url")
+  status String 
 
   // Quan hệ: Campus 1 mandatory to Venue (Sửa từ Int? thành Int)
   campusId Int    @map("campus_id")
@@ -202,7 +205,7 @@ model Venue {
 model Seat {
   id          Int     @id @default(autoincrement())
   rowLabel    String  @map("row_label")
-  numberLabel String  @map("number_label")
+  colLabel Int  @map("col_label")
   seatType    String  @map("seat_type")
   isActive    Boolean @default(true) @map("is_active")
 
@@ -221,6 +224,7 @@ model Campus {
   code     String  @unique
   capacity Int?
   address  String?
+  image    String?
   status   String
 
   // Quan hệ: 1 Campus -> Many Venues (Mandatory)

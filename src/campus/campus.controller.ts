@@ -8,13 +8,24 @@ import {
   Patch,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiTags,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { CampusService } from './campus.service';
 import { Public } from '../auth/decorator';
+import { Roles } from '../auth/decorator/roles.decorator';
+import { JwtGuard } from '../auth/guard/jwt.guard';
+import { RolesGuard } from '../auth/guard/roles.guard';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('campus')
 @Controller('campus')
+@UseGuards(JwtGuard, RolesGuard)
 export class CampusController {
   constructor(private readonly campusService: CampusService) {}
 
@@ -38,23 +49,35 @@ export class CampusController {
     return this.campusService.getCampusById(parseInt(id));
   }
 
-  @Post()
+  @Get(':id/venues')
   @Public()
-  @ApiOperation({ summary: 'Tạo thêm campus' })
+  @ApiOperation({ summary: 'Lấy danh sách venues của campus' })
+  getVenuesByCampusId(@Param('id') id: string) {
+    return this.campusService.getVenuesByCampusId(parseInt(id));
+  }
+
+  @Post()
+  @Roles(UserRole.admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Tạo thêm campus (admin only)' })
   createCampus(@Body() campus: CreateCampusDto) {
     return this.campusService.createCampus(campus);
   }
 
   @Patch(':id')
-  @Public()
-  @ApiOperation({ summary: 'Cập nhật thông tin campus' })
+  @Roles(UserRole.admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cập nhật thông tin campus (admin only)' })
   updateCampus(@Param('id') id: string, @Body() campus: CreateCampusDto) {
     return this.campusService.updateCampus(parseInt(id), campus);
   }
 
   @Delete(':id')
-  @Public()
-  @ApiOperation({ summary: 'Xóa campus (set status thành Inactive)' })
+  @Roles(UserRole.admin)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Xóa campus (set status thành Inactive) (admin only)',
+  })
   deleteCampusById(@Param('id') id: string) {
     return this.campusService.deleteCampusById(parseInt(id));
   }
