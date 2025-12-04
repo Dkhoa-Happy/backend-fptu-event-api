@@ -15,7 +15,6 @@ export class VenueService {
         location: true,
         row: true,
         column: true,
-        capacity: true,
         hasSeats: true,
         mapImageUrl: true,
         status: true,
@@ -35,7 +34,6 @@ export class VenueService {
           id: true,
           name: true,
           location: true,
-          capacity: true,
           hasSeats: true,
           mapImageUrl: true,
           status: true,
@@ -67,16 +65,8 @@ export class VenueService {
   }
 
   async createVenue(venue: CreateVenueDto) {
-    const {
-      name,
-      location,
-      row,
-      column,
-      capacity,
-      hasSeats,
-      mapImageUrl,
-      campusId,
-    } = venue;
+    const { name, location, row, column, hasSeats, mapImageUrl, campusId } =
+      venue;
     try {
       // Check if campus exists
       const campus = await this.prisma.campus.findUnique({
@@ -92,7 +82,6 @@ export class VenueService {
           location,
           row,
           column,
-          capacity,
           hasSeats,
           mapImageUrl,
           campusId,
@@ -146,16 +135,7 @@ export class VenueService {
   }
 
   async updateVenue(id: number, venue: CreateVenueDto) {
-    const {
-      name,
-      location,
-      row,
-      column,
-      capacity,
-      hasSeats,
-      mapImageUrl,
-      campusId,
-    } = venue;
+    const { name, location, hasSeats, mapImageUrl, campusId } = venue;
     try {
       const existingVenue = await this.prisma.venue.findUnique({
         where: { id },
@@ -176,9 +156,6 @@ export class VenueService {
         data: {
           name,
           location,
-          row,
-          column,
-          capacity,
           hasSeats,
           mapImageUrl,
           campusId,

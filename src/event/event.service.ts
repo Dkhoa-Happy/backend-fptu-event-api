@@ -6,7 +6,12 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateEventDto, UpdateEventDto, QueryEventDto, AssignStaffDto } from './dto';
+import {
+  CreateEventDto,
+  UpdateEventDto,
+  QueryEventDto,
+  AssignStaffDto,
+} from './dto';
 
 @Injectable()
 export class EventService {
@@ -48,7 +53,6 @@ export class EventService {
               id: true,
               name: true,
               location: true,
-              capacity: true,
               hasSeats: true,
             },
           },
@@ -165,7 +169,6 @@ export class EventService {
               id: true,
               name: true,
               location: true,
-              capacity: true,
               hasSeats: true,
             },
           },
@@ -215,7 +218,6 @@ export class EventService {
             id: true,
             name: true,
             location: true,
-            capacity: true,
             hasSeats: true,
             campusId: true,
           },
@@ -312,7 +314,7 @@ export class EventService {
               id: true,
               name: true,
               location: true,
-              capacity: true,
+
               hasSeats: true,
             },
           },
@@ -454,7 +456,6 @@ export class EventService {
               id: true,
               name: true,
               location: true,
-              capacity: true,
               hasSeats: true,
             },
           },
@@ -612,13 +613,7 @@ export class EventService {
       };
     }
 
-    const {
-      page = 1,
-      limit = 10,
-      search,
-      status,
-      venueId,
-    } = query;
+    const { page = 1, limit = 10, search, status, venueId } = query;
 
     const where: Prisma.EventWhereInput = {
       organizerId: {
@@ -664,7 +659,6 @@ export class EventService {
               id: true,
               name: true,
               location: true,
-              capacity: true,
               hasSeats: true,
             },
           },

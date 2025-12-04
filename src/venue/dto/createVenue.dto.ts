@@ -33,13 +33,6 @@ export class CreateVenueDto {
   column: number;
 
   @ApiProperty({
-    description: 'Sức chứa venue',
-    example: '500',
-  })
-  @IsInt()
-  capacity: number;
-
-  @ApiProperty({
     description: 'Venue có ghế hay không',
     example: true,
   })
