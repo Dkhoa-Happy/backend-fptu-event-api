@@ -30,6 +30,7 @@ export class VenueController {
   constructor(private readonly venueService: VenueService) {}
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'Lấy danh sách venue' })
   @ApiQuery({
     name: 'status',
@@ -42,6 +43,7 @@ export class VenueController {
   }
 
   @Get(':id')
+  @Public()
   @ApiOperation({ summary: 'Lấy thông tin venue theo ID' })
   getVenueById(@Param('id') id: string) {
     return this.venueService.getVenueById(parseInt(id));

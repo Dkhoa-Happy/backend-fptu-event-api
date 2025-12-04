@@ -47,6 +47,8 @@ export class EventSeeder implements Seeder {
       create: {
         name: 'FU HCM Hall A',
         location: 'FPT University Hồ Chí Minh',
+        row: 10,
+        column: 10,
         capacity: 500,
         hasSeats: false,
         campusId: campus.id,
