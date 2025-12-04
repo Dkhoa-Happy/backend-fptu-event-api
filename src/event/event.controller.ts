@@ -125,8 +125,7 @@ export class EventController {
   @Post(':eventId/staff')
   @Roles(UserRole.admin, UserRole.event_organizer)
   @ApiOperation({
-    summary:
-      'Assign staff to event - Required roles: admin, event_organizer',
+    summary: 'Assign staff to event - Required roles: admin, event_organizer',
     description:
       'Assigns a staff member to an event for check-in duties. Only the event organizer owner or admin can assign staff.',
   })

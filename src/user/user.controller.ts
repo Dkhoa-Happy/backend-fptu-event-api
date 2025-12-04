@@ -21,6 +21,7 @@ import { GetUser, Roles } from '../auth/decorator';
 import { JwtGuard, RolesGuard } from '../auth/guard';
 import { UserRole } from '@prisma/client';
 import {
+  ApproveUserDto,
   CreateUserDto,
   QueryUserDto,
   UpdateProfileDto,
@@ -97,6 +98,25 @@ export class UserController {
     return this.userService.getStaffs(query);
   }
 
+  @Get('pending')
+  @Roles(UserRole.admin)
+  @ApiOperation({
+    summary:
+      'Get all pending users waiting for approval - Required roles: admin',
+    description:
+      'Returns list of users with PENDING status who submitted student card images',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of pending users with student card images',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: admin',
+  })
+  async getPendingUsers(@Query() query: QueryUserDto) {
+    return this.userService.getPendingUsers(query);
+  }
+
   @Get(':id')
   @Roles(UserRole.admin, UserRole.staff, UserRole.event_organizer)
   @ApiOperation({
@@ -138,5 +158,26 @@ export class UserController {
   })
   async deactivateUser(@Param('id', ParseIntPipe) id: number) {
     return this.userService.deactivateUser(id);
+  }
+
+  @Patch(':id/approve')
+  @Roles(UserRole.admin)
+  @ApiOperation({
+    summary: 'Approve or reject pending user - Required roles: admin',
+    description:
+      'Approve (APPROVED) or reject (REJECTED) a user account that is pending approval',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User status updated successfully',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: admin',
+  })
+  async approveUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ApproveUserDto,
+  ) {
+    return this.userService.approveUser(id, dto);
   }
 }

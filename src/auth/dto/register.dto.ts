@@ -59,7 +59,7 @@ export class RegisterDto {
   @IsBoolean()
   gender?: boolean;
 
-  @ApiPropertyOptional({ example: 'FPT University, Hoa Lac' })
+  @ApiPropertyOptional({ example: '342 Nguyen Xuyen, P06, Q9, TpHCM' })
   @IsOptional()
   @IsString({ message: 'Address must be a string' })
   address?: string;
@@ -68,4 +68,13 @@ export class RegisterDto {
   @IsOptional()
   @IsString({ message: 'Avatar URL must be a string' })
   avatar?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://example.com/student-card.jpg',
+    description:
+      'Student card image URL (required for non-FPT email addresses)',
+  })
+  @IsOptional()
+  @IsString({ message: 'Student card image URL must be a string' })
+  studentCardImage?: string;
 }

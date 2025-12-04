@@ -15,6 +15,12 @@ enum UserRole {
   event_organizer
 }
 
+enum UserStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum EventStatus {
   DRAFT
   PENDING
@@ -34,21 +40,23 @@ enum CheckinResult {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  userName     String   @unique @map("user_name")
-  passwordHash String?  @map("password_hash")
-  googleId     String?  @unique @map("google_id")
-  avatar       String?
-  phoneNumber  String?  @map("phone_number")
-  gender       Boolean? @map("gender")
-  address      String?
-  firstName    String   @map("first_name")
-  lastName     String   @map("last_name")
-  studentCode  String?  @unique @map("student_code")
-  email        String   @unique
-  createdAt    DateTime @default(now()) @map("created_at")
-  isActive     Boolean  @default(true) @map("is_active")
-  roleName     UserRole @map("role_name")
+  id               Int        @id @default(autoincrement())
+  userName         String     @unique @map("user_name")
+  passwordHash     String?    @map("password_hash")
+  googleId         String?    @unique @map("google_id")
+  avatar           String?
+  phoneNumber      String?    @map("phone_number")
+  gender           Boolean?   @map("gender")
+  address          String?
+  firstName        String     @map("first_name")
+  lastName         String     @map("last_name")
+  studentCode      String?    @unique @map("student_code")
+  email            String     @unique
+  studentCardImage String?    @map("student_card_image")
+  status           UserStatus @default(PENDING) @map("status")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  isActive         Boolean    @default(true) @map("is_active")
+  roleName         UserRole   @map("role_name")
 
   // Quan hệ: Campus 1 mandatory to User
   campusId Int    @map("campus_id")

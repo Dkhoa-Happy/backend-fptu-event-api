@@ -2,6 +2,9 @@
 CREATE TYPE "UserRole" AS ENUM ('student', 'admin', 'staff', 'event_organizer');
 
 -- CreateEnum
+CREATE TYPE "UserStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+
+-- CreateEnum
 CREATE TYPE "EventStatus" AS ENUM ('DRAFT', 'PENDING', 'PUBLISHED', 'CANCELED');
 
 -- CreateEnum
@@ -24,6 +27,8 @@ CREATE TABLE "users" (
     "last_name" TEXT NOT NULL,
     "student_code" TEXT,
     "email" TEXT NOT NULL,
+    "student_card_image" TEXT,
+    "status" "UserStatus" NOT NULL DEFAULT 'PENDING',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "role_name" "UserRole" NOT NULL,
