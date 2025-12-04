@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import type { Seeder } from './base.seeder';
 
@@ -20,7 +20,7 @@ export class UserSeeder implements Seeder {
     // Staff account
     await prisma.user.upsert({
       where: { email: 'staff@example.com' },
-      update: {},
+      update: { status: UserStatus.APPROVED },
       create: {
         email: 'staff@example.com',
         userName: 'staff1',
@@ -35,13 +35,14 @@ export class UserSeeder implements Seeder {
         roleName: 'staff',
         campusId: campus.id,
         isActive: true,
+        status: UserStatus.APPROVED,
       },
     });
 
     // Event organizer account
     await prisma.user.upsert({
       where: { email: 'organizer@example.com' },
-      update: {},
+      update: { status: UserStatus.APPROVED },
       create: {
         email: 'organizer@example.com',
         userName: 'organizer1',
@@ -56,13 +57,14 @@ export class UserSeeder implements Seeder {
         roleName: 'event_organizer',
         campusId: campus.id,
         isActive: true,
+        status: UserStatus.APPROVED,
       },
     });
 
     // Student account
     await prisma.user.upsert({
       where: { email: 'student@example.com' },
-      update: {},
+      update: { status: UserStatus.APPROVED },
       create: {
         email: 'student@example.com',
         userName: 'student1',
@@ -77,12 +79,13 @@ export class UserSeeder implements Seeder {
         roleName: 'student',
         campusId: campus.id,
         isActive: true,
+        status: UserStatus.APPROVED,
       },
     });
     // Admin account
     await prisma.user.upsert({
       where: { email: 'admin@example.com' },
-      update: {},
+      update: { status: UserStatus.APPROVED },
       create: {
         email: 'admin@example.com',
         userName: 'admin1',
@@ -97,6 +100,7 @@ export class UserSeeder implements Seeder {
         roleName: 'admin',
         campusId: campus.id,
         isActive: true,
+        status: UserStatus.APPROVED,
       },
     });
   }

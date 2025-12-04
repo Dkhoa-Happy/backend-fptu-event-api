@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import { UserStatus } from '@prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -29,10 +31,25 @@ export class AuthService {
       gender,
       address,
       avatar,
+      studentCardImage,
     } = dto;
+
+    // Kiểm tra email domain
+    const isFptEmail = email.toLowerCase().endsWith('@fpt.edu.vn');
+
+    // Nếu không phải email FPT, yêu cầu studentCardImage
+    if (!isFptEmail && !studentCardImage) {
+      throw new BadRequestException(
+        'Student card image is required for non-FPT email addresses',
+      );
+    }
 
     try {
       const passwordHash = await argon2.hash(password);
+
+      // Xác định status: APPROVED nếu là email FPT, PENDING nếu không
+      const status = isFptEmail ? UserStatus.APPROVED : UserStatus.PENDING;
+
       const user = await this.prisma.user.create({
         data: {
           email,
@@ -47,13 +64,25 @@ export class AuthService {
           gender,
           address,
           avatar,
+          studentCardImage: studentCardImage || null,
+          status,
         },
       });
 
-      return {
-        message: 'Register successfully',
-        accessToken: this.signToken(user.id, user.email, user.roleName),
-      };
+      // Nếu là email FPT, trả về token ngay. Nếu không, thông báo chờ duyệt
+      if (isFptEmail) {
+        return {
+          message: 'Register successfully',
+          accessToken: this.signToken(user.id, user.email, user.roleName),
+        };
+      } else {
+        return {
+          message:
+            'Registration submitted successfully. Your account is pending approval. Please wait for admin review.',
+          status: 'PENDING',
+          userId: user.id,
+        };
+      }
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -77,6 +106,26 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // Kiểm tra status - chỉ cho phép APPROVED users đăng nhập
+    if (user.status !== UserStatus.APPROVED) {
+      if (user.status === UserStatus.PENDING) {
+        throw new UnauthorizedException(
+          'Your account is pending approval. Please wait for admin review.',
+        );
+      } else if (user.status === UserStatus.REJECTED) {
+        throw new UnauthorizedException(
+          'Your account has been rejected. Please contact administrator.',
+        );
+      }
+    }
+
+    // User đăng nhập bằng Google không có passwordHash
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        'This account uses Google login. Please use Google to sign in.',
+      );
+    }
+
     try {
       const isValidPassword = await argon2.verify(user.passwordHash, password);
       if (!isValidPassword) {
@@ -93,6 +142,115 @@ export class AuthService {
     };
   }
 
+  async validateGoogleUser(googleUser: {
+    googleId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    avatar: string | null;
+  }) {
+    const { googleId, email, firstName, lastName, avatar } = googleUser;
+
+    // Kiểm tra email domain
+    const isFptEmail = email.toLowerCase().endsWith('@fpt.edu.vn');
+
+    // Tìm user theo googleId hoặc email
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ googleId }, { email }],
+      },
+    });
+
+    if (user) {
+      // Kiểm tra status - chỉ cho phép APPROVED users đăng nhập
+      if (user.status !== UserStatus.APPROVED) {
+        if (user.status === UserStatus.PENDING) {
+          throw new UnauthorizedException(
+            'Your account is pending approval. Please wait for admin review.',
+          );
+        } else if (user.status === UserStatus.REJECTED) {
+          throw new UnauthorizedException(
+            'Your account has been rejected. Please contact administrator.',
+          );
+        }
+      }
+
+      // User đã tồn tại - cập nhật thông tin Google nếu cần
+      if (!user.googleId) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleId,
+            avatar: avatar || user.avatar,
+            firstName: firstName || user.firstName,
+            lastName: lastName || user.lastName,
+          },
+        });
+      } else {
+        // Cập nhật avatar nếu có
+        if (avatar && avatar !== user.avatar) {
+          user = await this.prisma.user.update({
+            where: { id: user.id },
+            data: { avatar },
+          });
+        }
+      }
+    } else {
+      // User mới - tạo account mới
+      // Lấy campus đầu tiên làm mặc định (hoặc bạn có thể yêu cầu user chọn)
+      const defaultCampus = await this.prisma.campus.findFirst({
+        where: { status: 'Active' },
+        orderBy: { id: 'asc' },
+      });
+
+      if (!defaultCampus) {
+        throw new UnauthorizedException(
+          'No active campus found. Please contact administrator.',
+        );
+      }
+
+      // Tạo userName từ email (phần trước @)
+      const userNameBase = email.split('@')[0];
+      let userName = userNameBase;
+      let counter = 1;
+
+      // Đảm bảo userName là unique
+      while (await this.prisma.user.findUnique({ where: { userName } })) {
+        userName = `${userNameBase}${counter}`;
+        counter++;
+      }
+
+      // Xác định status: APPROVED nếu là email FPT, PENDING nếu không
+      const status = isFptEmail ? UserStatus.APPROVED : UserStatus.PENDING;
+
+      user = await this.prisma.user.create({
+        data: {
+          email,
+          googleId,
+          userName,
+          firstName: firstName || '',
+          lastName: lastName || '',
+          avatar,
+          roleName: 'student',
+          campusId: defaultCampus.id,
+          status,
+        },
+      });
+
+      // Nếu không phải email FPT, thông báo chờ duyệt
+      if (!isFptEmail) {
+        throw new UnauthorizedException(
+          'Your account has been created but is pending approval. Please wait for admin review.',
+        );
+      }
+    }
+
+    return {
+      message: 'Google login successfully',
+      accessToken: this.signToken(user.id, user.email, user.roleName),
+    };
+  }
+
   private signToken(userId: number, email: string, roleName: string) {
     const payload = {
       sub: userId,
@@ -103,7 +261,7 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  private excludePassword<T extends { passwordHash?: string }>(user: T) {
+  private excludePassword<T extends { passwordHash?: string | null }>(user: T) {
     const { passwordHash: _password, ...rest } = user;
     return rest;
   }

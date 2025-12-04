@@ -21,10 +21,11 @@ import {
   CreateTicketDto,
   UpdateTicketDto,
   QueryTicketDto,
+  QueryMyTicketDto,
   ScanTicketDto,
 } from './dto';
 import { JwtGuard, RolesGuard } from '../auth/guard';
-import { Roles } from '../auth/decorator';
+import { GetUser, Roles } from '../auth/decorator';
 import { UserRole } from '@prisma/client';
 
 @ApiTags('tickets')
@@ -55,8 +56,8 @@ export class TicketController {
   @ApiForbiddenResponse({
     description: 'Forbidden. Required roles: student',
   })
-  async create(@Body() dto: CreateTicketDto) {
-    return this.ticketService.create(dto);
+  async create(@Body() dto: CreateTicketDto, @GetUser('id') userId: number) {
+    return this.ticketService.create(dto, userId);
   }
 
   @Get()
@@ -77,11 +78,30 @@ export class TicketController {
     return this.ticketService.findAll(query);
   }
 
+  @Get('me')
+  @Roles(UserRole.student)
+  @ApiOperation({
+    summary:
+      'Get current student tickets with pagination - Required roles: student',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of current user tickets with meta retrieved',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: student',
+  })
+  async findMyTickets(
+    @GetUser('id') userId: number,
+    @Query() query: QueryMyTicketDto,
+  ) {
+    return this.ticketService.findMyTickets(userId, query);
+  }
+
   @Get('qr/:qrCode')
   @Roles(UserRole.admin, UserRole.staff, UserRole.student)
   @ApiOperation({
-    summary:
-      'Get ticket by QR code - Required roles: admin, staff, student',
+    summary: 'Get ticket by QR code - Required roles: admin, staff, student',
   })
   @ApiResponse({
     status: 200,
@@ -101,8 +121,7 @@ export class TicketController {
   @Post('scan')
   @Roles(UserRole.admin, UserRole.staff)
   @ApiOperation({
-    summary:
-      'Scan ticket QR code for check-in - Required roles: admin, staff',
+    summary: 'Scan ticket QR code for check-in - Required roles: admin, staff',
     description:
       'Scans a ticket QR code and performs check-in. Updates ticket status to USED if valid, creates check-in log. Uses transaction to ensure data consistency.',
   })
@@ -196,4 +215,3 @@ export class TicketController {
     return this.ticketService.remove(id);
   }
 }
-
