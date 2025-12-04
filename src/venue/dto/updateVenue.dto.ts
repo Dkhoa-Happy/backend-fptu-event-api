@@ -1,43 +1,24 @@
 import { IsString, IsInt, IsBoolean, IsOptional, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class CreateVenueDto {
+export class UpdateVenueDto {
   @ApiProperty({
     description: 'Tên venue',
     example: 'Hội trường A',
+    required: false,
   })
+  @IsOptional()
   @IsString()
-  name: string;
+  name?: string;
 
   @ApiProperty({
     description: 'Địa chỉ/vị trí venue',
     example: 'Tầng 3, Nhà A, FU Hòa Lạc',
+    required: false,
   })
+  @IsOptional()
   @IsString()
-  location: string;
-
-  @ApiProperty({
-    description: 'Số hàng ghế',
-    example: 10,
-  })
-  @IsInt()
-  @Min(0)
-  row: number;
-
-  @ApiProperty({
-    description: 'Số cột ghế',
-    example: 10,
-  })
-  @IsInt()
-  @Min(0)
-  column: number;
-
-  @ApiProperty({
-    description: 'Venue có ghế hay không',
-    example: true,
-  })
-  @IsBoolean()
-  hasSeats: boolean;
+  location?: string;
 
   @ApiProperty({
     description: 'URL hình ảnh bản đồ ghế',
@@ -47,11 +28,4 @@ export class CreateVenueDto {
   @IsOptional()
   @IsString()
   mapImageUrl?: string;
-
-  @ApiProperty({
-    description: 'ID Campus',
-    example: 1,
-  })
-  @IsInt()
-  campusId: number;
 }

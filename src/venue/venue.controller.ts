@@ -1,4 +1,4 @@
-import { CreateVenueDto } from './dto/createVenue.dto';
+import { CreateVenueDto, UpdateVenueDto } from './dto';
 import {
   Body,
   Controller,
@@ -61,7 +61,7 @@ export class VenueController {
   @Roles(UserRole.admin)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cập nhật thông tin venue (admin only)' })
-  updateVenue(@Param('id') id: string, @Body() venue: CreateVenueDto) {
+  updateVenue(@Param('id') id: string, @Body() venue: UpdateVenueDto) {
     return this.venueService.updateVenue(parseInt(id), venue);
   }
 
