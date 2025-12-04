@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateVenueDto } from './dto';
+import { CreateVenueDto, UpdateVenueDto } from './dto';
 
 @Injectable()
 export class VenueService {
@@ -76,12 +76,23 @@ export class VenueService {
         throw new BadRequestException('Campus không tồn tại');
       }
 
+      // Nếu hasSeats là false, force row và column về 0
+      const finalRow = hasSeats ? row : 0;
+      const finalColumn = hasSeats ? column : 0;
+
+      // Nếu hasSeats là true, validate row và column phải > 0
+      if (hasSeats && (row <= 0 || column <= 0)) {
+        throw new BadRequestException(
+          'Khi venue có ghế (hasSeats = true), số hàng và số cột phải lớn hơn 0',
+        );
+      }
+
       const response = await this.prisma.venue.create({
         data: {
           name,
           location,
-          row,
-          column,
+          row: finalRow,
+          column: finalColumn,
           hasSeats,
           mapImageUrl,
           campusId,
@@ -134,8 +145,8 @@ export class VenueService {
     }
   }
 
-  async updateVenue(id: number, venue: CreateVenueDto) {
-    const { name, location, hasSeats, mapImageUrl, campusId } = venue;
+  async updateVenue(id: number, venue: UpdateVenueDto) {
+    const { name, location, mapImageUrl } = venue;
     try {
       const existingVenue = await this.prisma.venue.findUnique({
         where: { id },
@@ -144,21 +155,12 @@ export class VenueService {
         throw new BadRequestException('Venue không tồn tại');
       }
 
-      const campus = await this.prisma.campus.findUnique({
-        where: { id: campusId },
-      });
-      if (!campus) {
-        throw new BadRequestException('Campus không tồn tại');
-      }
-
       const response = await this.prisma.venue.update({
         where: { id },
         data: {
           name,
           location,
-          hasSeats,
           mapImageUrl,
-          campusId,
         },
       });
       return { message: 'Cập nhật venue thành công', venue: response };
