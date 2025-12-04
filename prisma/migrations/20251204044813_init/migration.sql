@@ -107,6 +107,8 @@ CREATE TABLE "venues" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
     "location" TEXT NOT NULL,
+    "row" INTEGER NOT NULL,
+    "column" INTEGER NOT NULL,
     "capacity" INTEGER NOT NULL,
     "has_seats" BOOLEAN NOT NULL,
     "map_image_url" TEXT,
@@ -120,7 +122,7 @@ CREATE TABLE "venues" (
 CREATE TABLE "seats" (
     "id" SERIAL NOT NULL,
     "row_label" TEXT NOT NULL,
-    "number_label" TEXT NOT NULL,
+    "col_label" INTEGER NOT NULL,
     "seat_type" TEXT NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "venue_id" INTEGER NOT NULL,

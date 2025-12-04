@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsBoolean, IsOptional } from 'class-validator';
+import { IsString, IsInt, IsBoolean, IsOptional, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateVenueDto {
@@ -15,6 +15,22 @@ export class CreateVenueDto {
   })
   @IsString()
   location: string;
+
+  @ApiProperty({
+    description: 'Số hàng ghế',
+    example: 10,
+  })
+  @IsInt()
+  @Min(1)
+  row: number;
+
+  @ApiProperty({
+    description: 'Số cột ghế',
+    example: 10,
+  })
+  @IsInt()
+  @Min(1)
+  column: number;
 
   @ApiProperty({
     description: 'Sức chứa venue',

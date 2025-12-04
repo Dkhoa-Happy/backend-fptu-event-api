@@ -13,6 +13,8 @@ export class VenueService {
         id: true,
         name: true,
         location: true,
+        row: true,
+        column: true,
         capacity: true,
         hasSeats: true,
         mapImageUrl: true,
@@ -42,7 +44,7 @@ export class VenueService {
             select: {
               id: true,
               rowLabel: true,
-              numberLabel: true,
+              colLabel: true,
               seatType: true,
               isActive: true,
             },
@@ -65,7 +67,16 @@ export class VenueService {
   }
 
   async createVenue(venue: CreateVenueDto) {
-    const { name, location, capacity, hasSeats, mapImageUrl, campusId } = venue;
+    const {
+      name,
+      location,
+      row,
+      column,
+      capacity,
+      hasSeats,
+      mapImageUrl,
+      campusId,
+    } = venue;
     try {
       // Check if campus exists
       const campus = await this.prisma.campus.findUnique({
@@ -79,6 +90,8 @@ export class VenueService {
         data: {
           name,
           location,
+          row,
+          column,
           capacity,
           hasSeats,
           mapImageUrl,
@@ -86,6 +99,40 @@ export class VenueService {
           status: 'Active',
         },
       });
+      // Nếu venue có seats (hasSeats true) và số hàng, cột hợp lệ thì tạo tất cả seats
+      if (
+        hasSeats &&
+        typeof row === 'number' &&
+        typeof column === 'number' &&
+        row > 0 &&
+        column > 0
+      ) {
+        const seats = [] as Array<{
+          rowLabel: string;
+          colLabel: number;
+          seatType: string;
+          isActive: boolean;
+          venueId: number;
+        }>;
+
+        for (let r = 1; r <= row; r++) {
+          for (let c = 1; c <= column; c++) {
+            seats.push({
+              rowLabel: String.fromCharCode(64 + r), // A, B, C, ...
+              colLabel: c,
+              seatType: 'standard',
+              isActive: true,
+              venueId: response.id,
+            });
+          }
+        }
+
+        // createMany
+        if (seats.length > 0) {
+          await this.prisma.seat.createMany({ data: seats });
+        }
+      }
+
       return { message: 'Tạo venue thành công', venue: response };
     } catch (error: unknown) {
       if (error instanceof BadRequestException) {
@@ -99,7 +146,16 @@ export class VenueService {
   }
 
   async updateVenue(id: number, venue: CreateVenueDto) {
-    const { name, location, capacity, hasSeats, mapImageUrl, campusId } = venue;
+    const {
+      name,
+      location,
+      row,
+      column,
+      capacity,
+      hasSeats,
+      mapImageUrl,
+      campusId,
+    } = venue;
     try {
       const existingVenue = await this.prisma.venue.findUnique({
         where: { id },
@@ -108,7 +164,6 @@ export class VenueService {
         throw new BadRequestException('Venue không tồn tại');
       }
 
-      // Check if campus exists
       const campus = await this.prisma.campus.findUnique({
         where: { id: campusId },
       });
@@ -121,6 +176,8 @@ export class VenueService {
         data: {
           name,
           location,
+          row,
+          column,
           capacity,
           hasSeats,
           mapImageUrl,
