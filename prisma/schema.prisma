@@ -63,6 +63,8 @@ model User {
   campusId Int    @map("campus_id")
   campus   Campus @relation(fields: [campusId], references: [id])
 
+  feedbacks Feedback[]
+
   // Quan hệ cũ
   hostedEvents Event[] @relation("HostEvents")
 
@@ -154,6 +156,8 @@ model Feedback {
   eventId String @map("event_id")
   event   Event  @relation(fields: [eventId], references: [id])
 
+  userId Int @map("user_id")
+  user User @relation(fields:[userId], references: [id])
   @@map("feedbacks")
 }
 
