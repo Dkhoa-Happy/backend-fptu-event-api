@@ -12,7 +12,6 @@ import {
   QueryTicketDto,
   QueryMyTicketDto,
 } from './dto';
-import { CheckinResult } from '@prisma/client';
 
 @Injectable()
 export class TicketService {
@@ -461,7 +460,7 @@ export class TicketService {
         (error as { code: string }).code === 'P2003'
       ) {
         throw new BadRequestException(
-          'Cannot delete ticket because it is referenced by other records (e.g., checkin logs)',
+          'Cannot delete ticket because it is referenced by other records',
         );
       }
 
@@ -506,22 +505,11 @@ export class TicketService {
       });
 
       if (!ticket) {
-        // Ticket not found - cannot create checkin log without valid ticketId
         throw new NotFoundException(`Ticket with QR code ${qrCode} not found`);
       }
 
       // Check ticket status
       if (ticket.status === 'USED') {
-        // Create FAIL checkin log
-        await tx.checkinLog.create({
-          data: {
-            result: CheckinResult.FAIL,
-            message: 'Ticket already used',
-            ticketId: ticket.id,
-            staffId: staffId,
-          },
-        });
-
         return {
           success: false,
           message: 'Ticket already used',
@@ -530,16 +518,6 @@ export class TicketService {
       }
 
       if (ticket.status === 'CANCELLED') {
-        // Create FAIL checkin log
-        await tx.checkinLog.create({
-          data: {
-            result: CheckinResult.FAIL,
-            message: 'Ticket cancelled',
-            ticketId: ticket.id,
-            staffId: staffId,
-          },
-        });
-
         return {
           success: false,
           message: 'Ticket cancelled',
@@ -577,16 +555,6 @@ export class TicketService {
           },
         });
 
-        // Create SUCCESS checkin log
-        await tx.checkinLog.create({
-          data: {
-            result: CheckinResult.SUCCESS,
-            message: null,
-            ticketId: ticket.id,
-            staffId: staffId,
-          },
-        });
-
         return {
           success: true,
           message: 'Check-in successful',
@@ -594,16 +562,6 @@ export class TicketService {
           user: updatedTicket.user,
         };
       }
-
-      // This should not happen, but handle unknown status
-      await tx.checkinLog.create({
-        data: {
-          result: CheckinResult.FAIL,
-          message: `Unknown ticket status: ${ticket.status}`,
-          ticketId: ticket.id,
-          staffId: staffId,
-        },
-      });
 
       return {
         success: false,
