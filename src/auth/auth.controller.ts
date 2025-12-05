@@ -1,16 +1,29 @@
-import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from './decorator';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly config: ConfigService,
+  ) {}
 
   @Post('register')
   @Public()
@@ -24,6 +37,34 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email & password' })
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('refresh')
+  @Public()
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiResponse({
+    status: 200,
+    description: 'New access & refresh tokens',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Refresh token successfully',
+        },
+        accessToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+        refreshToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+      },
+    },
+  })
+  refresh(@Body() dto: RefreshTokenDto) {
+    return this.authService.refreshTokens(dto.refreshToken);
   }
 
   @Get('google')
@@ -57,18 +98,41 @@ export class AuthController {
       type: 'object',
       properties: {
         message: { type: 'string', example: 'Google login successfully' },
-        accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+        accessToken: {
+          type: 'string',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
       },
     },
   })
   async googleAuthRedirect(@Req() req, @Res() res: Response) {
-    const result = await this.authService.validateGoogleUser(req.user);
-    
-    // Redirect về frontend với token (hoặc trả về JSON)
-    // Option 1: Trả về JSON (cho API)
-    return res.json(result);
-    
-    // Option 2: Redirect về frontend với token trong query (uncomment nếu cần)
-    // return res.redirect(`http://localhost:3000/auth/callback?token=${result.accessToken}`);
+    try {
+      const result = await this.authService.validateGoogleUser(req.user);
+
+      // Nếu có FRONTEND_URL trong env, redirect về frontend với token
+      const frontendUrl = this.config.get<string>('FRONTEND_URL');
+      if (frontendUrl) {
+        return res.redirect(
+          `${frontendUrl}/auth/callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+        );
+      }
+
+      // Nếu không có FRONTEND_URL, trả về JSON (cho API testing)
+      return res.json(result);
+    } catch (error) {
+      // Xử lý lỗi: redirect về frontend với error hoặc trả về JSON error
+      const frontendUrl = this.config.get<string>('FRONTEND_URL');
+      if (frontendUrl) {
+        const errorMessage = encodeURIComponent(
+          error instanceof Error ? error.message : 'Google login failed',
+        );
+        return res.redirect(`${frontendUrl}/login?error=${errorMessage}`);
+      }
+
+      // Trả về JSON error nếu không có FRONTEND_URL
+      return res.status(401).json({
+        message: error instanceof Error ? error.message : 'Google login failed',
+      });
+    }
   }
 }
