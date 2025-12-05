@@ -176,6 +176,7 @@ model Speaker {
   avatar        String?
   type          String
   company       String?
+  imageUrl      String?
   createdAt     DateTime       @default(now()) @map("created_at")
   eventSpeakers EventSpeaker[]
 
