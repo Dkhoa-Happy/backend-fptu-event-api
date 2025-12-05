@@ -9,7 +9,6 @@ import { CampusModule } from './campus/campus.module';
 import { VenueModule } from './venue/venue.module';
 import { OrganizerModule } from './organizer/organizer.module';
 import { TicketModule } from './ticket/ticket.module';
-import { CheckinLogModule } from './checkin-log/checkin-log.module';
 import { SeatModule } from './seat/seat.module';
 import { FeedbackModule } from './feedback/feedback.module';
 
@@ -25,7 +24,6 @@ import { FeedbackModule } from './feedback/feedback.module';
     VenueModule,
     OrganizerModule,
     TicketModule,
-    CheckinLogModule,
     SeatModule,
     FeedbackModule,
   ],
