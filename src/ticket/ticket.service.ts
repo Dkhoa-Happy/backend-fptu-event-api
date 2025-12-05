@@ -31,6 +31,31 @@ export class TicketService {
       throw new BadRequestException('User already registered for this event');
     }
 
+    // Check if seat exists and is active
+    const seat = await this.prisma.seat.findUnique({
+      where: { id: dto.seatId },
+    });
+
+    if (!seat) {
+      throw new NotFoundException(`Seat with ID ${dto.seatId} not found`);
+    }
+
+    if (!seat.isActive) {
+      throw new BadRequestException('Seat is not active');
+    }
+
+    // Check if seat is already booked for this event
+    const existingSeatBooking = await this.prisma.ticket.findFirst({
+      where: {
+        eventId: dto.eventId,
+        seatId: dto.seatId,
+      },
+    });
+
+    if (existingSeatBooking) {
+      throw new BadRequestException('Seat is already booked for this event');
+    }
+
     // Generate unique QR code using UUID v4
     let qrCode: string;
     let isUnique = false;
@@ -62,6 +87,7 @@ export class TicketService {
           qrCode: qrCode!,
           userId,
           eventId: dto.eventId,
+          seatId: dto.seatId,
           status: 'VALID',
         },
         include: {
@@ -84,6 +110,14 @@ export class TicketService {
               status: true,
             },
           },
+          seat: {
+            select: {
+              id: true,
+              rowLabel: true,
+              colLabel: true,
+              seatType: true,
+            },
+          },
         },
       });
 
@@ -95,8 +129,29 @@ export class TicketService {
         'code' in error &&
         (error as { code: string }).code === 'P2002'
       ) {
-        // Unique constraint violation (user_id + event_id)
-        throw new BadRequestException('User already registered for this event');
+        // Unique constraint violation
+        const meta =
+          'meta' in error && typeof error.meta === 'object'
+            ? (error.meta as { target?: string[] })
+            : undefined;
+
+        if (
+          meta?.target &&
+          meta.target.includes('userId') &&
+          meta.target.includes('eventId')
+        ) {
+          throw new BadRequestException('User đã đăng ký sự kiện này rồi');
+        }
+
+        if (
+          meta?.target &&
+          meta.target.includes('eventId') &&
+          meta.target.includes('seatId')
+        ) {
+          throw new BadRequestException('Ghế này đã được chọn');
+        }
+
+        throw new BadRequestException('Unique constraint violation');
       }
 
       if (
@@ -105,7 +160,7 @@ export class TicketService {
         'code' in error &&
         (error as { code: string }).code === 'P2003'
       ) {
-        throw new NotFoundException('User or Event not found');
+        throw new NotFoundException('Không tìm thấy user hoặc seat');
       }
 
       throw error;
@@ -558,4 +613,3 @@ export class TicketService {
     });
   }
 }
-
