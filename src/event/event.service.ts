@@ -197,6 +197,9 @@ export class EventService {
 
     const skip = (page - 1) * limit;
 
+    // Student không được xem thông tin nội bộ như eventStaffs
+    const isStudent = currentUser?.roleName === 'student';
+
     const [items, total] = await Promise.all([
       this.prisma.event.findMany({
         where,
@@ -230,21 +233,26 @@ export class EventService {
               lastName: true,
             },
           },
-          eventStaffs: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  userName: true,
-                  email: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                  roleName: true,
+          // Chỉ include eventStaffs nếu không phải student
+          ...(isStudent
+            ? {}
+            : {
+                eventStaffs: {
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        userName: true,
+                        email: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true,
+                        roleName: true,
+                      },
+                    },
+                  },
                 },
-              },
-            },
-          },
+              }),
         },
       }),
       this.prisma.event.count({ where }),
@@ -265,6 +273,9 @@ export class EventService {
     id: string,
     currentUser?: { roleName?: string; campusId?: number },
   ) {
+    // Student không được xem thông tin nội bộ như eventStaffs
+    const isStudent = currentUser?.roleName === 'student';
+
     const event = await this.prisma.event.findUnique({
       where: { id },
       include: {
@@ -295,21 +306,26 @@ export class EventService {
             lastName: true,
           },
         },
-        eventStaffs: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                userName: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                roleName: true,
+        // Chỉ include eventStaffs nếu không phải student
+        ...(isStudent
+          ? {}
+          : {
+              eventStaffs: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      userName: true,
+                      email: true,
+                      firstName: true,
+                      lastName: true,
+                      avatar: true,
+                      roleName: true,
+                    },
+                  },
+                },
               },
-            },
-          },
-        },
+            }),
       },
     });
 
