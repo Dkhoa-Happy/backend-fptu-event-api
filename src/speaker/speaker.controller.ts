@@ -158,10 +158,9 @@ export class SpeakerController {
 
   // EventSpeaker Management Endpoints
   @Post('events/:eventId/assign')
-  @Roles(UserRole.admin, UserRole.event_organizer)
+  @Roles(UserRole.event_organizer)
   @ApiOperation({
-    summary:
-      'Assign speaker to event - Required roles: admin, event_organizer',
+    summary: 'Assign speaker to event - Required roles: event_organizer',
     description:
       'Assigns a speaker to an event. Only the event organizer owner or admin can assign speakers.',
   })
@@ -253,4 +252,3 @@ export class SpeakerController {
     return this.speakerService.findEventSpeakers(eventId);
   }
 }
-

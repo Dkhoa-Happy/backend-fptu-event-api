@@ -3,13 +3,11 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsDateString,
-  IsEnum,
   IsInt,
   IsOptional,
   IsString,
   Min,
 } from 'class-validator';
-import { EventStatus } from '@prisma/client';
 
 export class CreateEventDto {
   @ApiProperty({ example: 'Tech Conference 2025' })
@@ -29,57 +27,38 @@ export class CreateEventDto {
   bannerUrl?: string;
 
   @ApiProperty({
-    example: '2025-01-15T09:00:00Z',
+    example: '2025-12-16T09:00:00Z',
     description: 'Event start time (ISO 8601 format)',
   })
   @IsDateString()
   startTime: string;
 
   @ApiProperty({
-    example: '2025-01-15T17:00:00Z',
+    example: '2025-12-16T17:00:00Z',
     description: 'Event end time (ISO 8601 format)',
   })
   @IsDateString()
   endTime: string;
 
   @ApiProperty({
-    example: '2025-01-01T00:00:00Z',
+    example: '2025-12-13T00:00:00Z',
     description: 'Registration start time (ISO 8601 format)',
   })
   @IsDateString()
   startTimeRegister: string;
 
   @ApiProperty({
-    example: '2025-01-10T23:59:59Z',
+    example: '2025-12-14T23:59:59Z',
     description: 'Registration end time (ISO 8601 format)',
   })
   @IsDateString()
   endTimeRegister: string;
-
-  @ApiPropertyOptional({
-    example: EventStatus.DRAFT,
-    enum: EventStatus,
-    default: EventStatus.DRAFT,
-    description: 'Event status',
-  })
-  @IsOptional()
-  @IsEnum(EventStatus)
-  status?: EventStatus;
 
   @ApiProperty({ example: 100, description: 'Maximum capacity of the event' })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   maxCapacity: number;
-
-  @ApiPropertyOptional({
-    example: false,
-    default: false,
-    description: 'Whether check-in is allowed for this event',
-  })
-  @IsOptional()
-  @IsBoolean()
-  allowCheckIn?: boolean;
 
   @ApiPropertyOptional({
     example: true,
@@ -105,4 +84,3 @@ export class CreateEventDto {
   @IsInt()
   venueId?: number;
 }
-

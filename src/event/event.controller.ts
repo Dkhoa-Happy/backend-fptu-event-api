@@ -35,9 +35,9 @@ export class EventController {
   constructor(private readonly eventService: EventService) {}
 
   @Post()
-  @Roles(UserRole.admin, UserRole.event_organizer)
+  @Roles(UserRole.event_organizer)
   @ApiOperation({
-    summary: 'Create a new event - Required roles: admin, event_organizer',
+    summary: 'Create a new event - Required roles: event_organizer',
   })
   @ApiResponse({
     status: 201,
@@ -50,8 +50,8 @@ export class EventController {
   @ApiForbiddenResponse({
     description: 'Forbidden. Required roles: admin, event_organizer',
   })
-  async create(@Body() dto: CreateEventDto) {
-    return this.eventService.create(dto);
+  async create(@Body() dto: CreateEventDto, @GetUser() user: any) {
+    return this.eventService.create(dto, user);
   }
 
   @Get('assigned')
@@ -108,7 +108,7 @@ export class EventController {
     summary:
       'Get all events with pagination and filters - Required roles: admin, staff, event_organizer, student',
     description:
-      'Support pagination, search, status, organizerId, venueId filters',
+      'Support pagination, search, status, organizerId, venueId filters. Students can only see PUBLISHED events.',
   })
   @ApiResponse({
     status: 200,
@@ -204,8 +204,12 @@ export class EventController {
   @ApiForbiddenResponse({
     description: 'Forbidden. Required roles: admin, event_organizer',
   })
-  async update(@Param('id') id: string, @Body() dto: UpdateEventDto) {
-    return this.eventService.update(id, dto);
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateEventDto,
+    @GetUser() user: any,
+  ) {
+    return this.eventService.update(id, dto, user);
   }
 
   @Delete(':id')

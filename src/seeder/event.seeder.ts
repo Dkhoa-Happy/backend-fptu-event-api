@@ -32,12 +32,15 @@ export class EventSeeder implements Seeder {
 
     const organizer = await prisma.organizer.upsert({
       where: { id: 1 },
-      update: {},
+      update: {
+        ownerId: organizerUser.id, // Set ownerId cho organizer
+      },
       create: {
         name: 'FU HCM Event Club',
         description: 'Default event organizer for demo data',
         contactEmail: 'organizer@example.com',
         campusId: campus.id,
+        ownerId: organizerUser.id, // Set ownerId cho organizer
       },
     });
 
@@ -80,7 +83,6 @@ export class EventSeeder implements Seeder {
             status: EventStatus.PUBLISHED,
             maxCapacity: 500,
             registeredCount: 1,
-            allowCheckIn: true,
             hostId: staff.id,
             organizerId: organizer.id,
             venueId: venue.id,

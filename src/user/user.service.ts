@@ -11,6 +11,7 @@ import {
   ApproveUserDto,
   CreateUserDto,
   QueryUserDto,
+  QueryStaffDto,
   UpdateProfileDto,
   UpdateUserDto,
 } from './dto';
@@ -73,6 +74,10 @@ export class UserService {
 
     try {
       const passwordHash = await argon2.hash(password);
+      
+      // Admin accounts are automatically APPROVED, others are PENDING
+      const status = roleName === UserRole.admin ? UserStatus.APPROVED : UserStatus.PENDING;
+      
       const user = await this.prisma.user.create({
         data: {
           userName,
@@ -87,6 +92,7 @@ export class UserService {
           gender,
           address,
           avatar,
+          status, // Set status based on role
         },
       });
 
@@ -183,10 +189,11 @@ export class UserService {
     };
   }
 
-  async getStaffs(query: QueryUserDto) {
+  async getStaffs(query: QueryStaffDto) {
+    // API này chỉ lấy staff, không cần filter roleName
     return this.getUsers({
       ...query,
-      roleName: UserRole.staff,
+      roleName: UserRole.staff, // Force roleName = staff
     });
   }
 
