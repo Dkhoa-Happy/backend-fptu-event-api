@@ -17,7 +17,7 @@ export class UserSeeder implements Seeder {
     const password = '123456';
     const passwordHash = await argon2.hash(password);
 
-    // Staff account
+    // Staff account 1
     await prisma.user.upsert({
       where: { email: 'staff@example.com' },
       update: { status: UserStatus.APPROVED },
@@ -30,6 +30,50 @@ export class UserSeeder implements Seeder {
         avatar:
           'https://i.pinimg.com/1200x/18/55/ed/1855ed060a7a3f747a5b1110bb0b2f05.jpg',
         phoneNumber: '0900000001',
+        address: 'FPT University - Hồ Chí Minh',
+        gender: true, // male
+        roleName: 'staff',
+        campusId: campus.id,
+        isActive: true,
+        status: UserStatus.APPROVED,
+      },
+    });
+
+    // Staff account 2
+    await prisma.user.upsert({
+      where: { email: 'staff2@example.com' },
+      update: { status: UserStatus.APPROVED },
+      create: {
+        email: 'staff2@example.com',
+        userName: 'staff2',
+        passwordHash,
+        firstName: 'Staff',
+        lastName: 'Two',
+        avatar:
+          'https://i.pinimg.com/1200x/18/55/ed/1855ed060a7a3f747a5b1110bb0b2f05.jpg',
+        phoneNumber: '0900000004',
+        address: 'FPT University - Hồ Chí Minh',
+        gender: false, // female
+        roleName: 'staff',
+        campusId: campus.id,
+        isActive: true,
+        status: UserStatus.APPROVED,
+      },
+    });
+
+    // Staff account 3
+    await prisma.user.upsert({
+      where: { email: 'staff3@example.com' },
+      update: { status: UserStatus.APPROVED },
+      create: {
+        email: 'staff3@example.com',
+        userName: 'staff3',
+        passwordHash,
+        firstName: 'Staff',
+        lastName: 'Three',
+        avatar:
+          'https://i.pinimg.com/1200x/18/55/ed/1855ed060a7a3f747a5b1110bb0b2f05.jpg',
+        phoneNumber: '0900000005',
         address: 'FPT University - Hồ Chí Minh',
         gender: true, // male
         roleName: 'staff',

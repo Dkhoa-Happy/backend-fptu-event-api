@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { EventStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateEventDto,
@@ -17,7 +18,45 @@ import {
 export class EventService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateEventDto) {
+  async create(
+    dto: CreateEventDto,
+    currentUser?: { id?: number; roleName?: string },
+  ) {
+    // Nếu là event_organizer, kiểm tra xem họ có phải owner của organizer không
+    if (currentUser?.roleName === 'event_organizer' && currentUser.id) {
+      // Kiểm tra user có phải là owner của ít nhất 1 organizer không
+      const userOrganizers = await this.prisma.organizer.findMany({
+        where: {
+          ownerId: currentUser.id,
+        },
+        select: { id: true },
+      });
+
+      if (userOrganizers.length === 0) {
+        throw new ForbiddenException(
+          'You cannot create events. You are not the owner of any organizer. Only organizer owners can create events.',
+        );
+      }
+
+      // Kiểm tra organizer được chọn có tồn tại và user có phải owner không
+      const organizer = await this.prisma.organizer.findUnique({
+        where: { id: dto.organizerId },
+        select: { ownerId: true },
+      });
+
+      if (!organizer) {
+        throw new NotFoundException(
+          `Organizer with ID ${dto.organizerId} not found`,
+        );
+      }
+
+      if (!organizer.ownerId || organizer.ownerId !== currentUser.id) {
+        throw new ForbiddenException(
+          'You do not have permission to create events for this organizer. You are not the owner of this organizer.',
+        );
+      }
+    }
+
     try {
       const event = await this.prisma.event.create({
         data: {
@@ -28,9 +67,8 @@ export class EventService {
           endTime: new Date(dto.endTime),
           startTimeRegister: new Date(dto.startTimeRegister),
           endTimeRegister: new Date(dto.endTimeRegister),
-          status: dto.status || 'DRAFT',
+          status: 'PENDING', // Always PENDING when creating, requires admin approval
           maxCapacity: dto.maxCapacity,
-          allowCheckIn: dto.allowCheckIn ?? false,
           isGlobal: dto.isGlobal ?? false,
           organizerId: dto.organizerId,
           venueId: dto.venueId,
@@ -104,7 +142,12 @@ export class EventService {
       ];
     }
 
-    if (status) {
+    // Nếu là student: chỉ được thấy event PUBLISHED (override status từ query nếu có)
+    if (currentUser?.roleName === 'student') {
+      // Student chỉ thấy event PUBLISHED, không thể filter status khác
+      where.status = EventStatus.PUBLISHED;
+    } else if (status) {
+      // Các role khác có thể filter theo status
       where.status = status;
     }
 
@@ -116,18 +159,24 @@ export class EventService {
       where.venueId = venueId;
     }
 
-    // Nếu là student: chỉ được thấy event global hoặc event thuộc campus của mình
-    if (currentUser?.roleName === 'student' && currentUser.campusId) {
-      const visibilityCondition: Prisma.EventWhereInput = {
-        OR: [{ isGlobal: true }, { venue: { campusId: currentUser.campusId } }],
-      };
+    // Nếu là student: filter theo campus visibility
+    if (currentUser?.roleName === 'student') {
+      // Nếu có campusId, filter theo campus
+      if (currentUser.campusId) {
+        const visibilityCondition: Prisma.EventWhereInput = {
+          OR: [
+            { isGlobal: true },
+            { venue: { campusId: currentUser.campusId } },
+          ],
+        };
 
-      if (where.AND) {
-        where.AND = Array.isArray(where.AND)
-          ? [...where.AND, visibilityCondition]
-          : [where.AND, visibilityCondition];
-      } else {
-        where.AND = [visibilityCondition];
+        if (where.AND) {
+          where.AND = Array.isArray(where.AND)
+            ? [...where.AND, visibilityCondition]
+            : [where.AND, visibilityCondition];
+        } else {
+          where.AND = [visibilityCondition];
+        }
       }
     }
 
@@ -181,6 +230,21 @@ export class EventService {
               lastName: true,
             },
           },
+          eventStaffs: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  userName: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                  roleName: true,
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.event.count({ where }),
@@ -231,6 +295,21 @@ export class EventService {
             lastName: true,
           },
         },
+        eventStaffs: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+                roleName: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -263,14 +342,45 @@ export class EventService {
     return event;
   }
 
-  async update(id: string, dto: UpdateEventDto) {
+  async update(
+    id: string,
+    dto: UpdateEventDto,
+    currentUser?: { id?: number; roleName?: string },
+  ) {
     // Check if event exists
     const existingEvent = await this.prisma.event.findUnique({
       where: { id },
+      include: {
+        organizer: {
+          select: {
+            ownerId: true,
+          },
+        },
+      },
     });
 
     if (!existingEvent) {
       throw new NotFoundException(`Event with ID ${id} not found`);
+    }
+
+    // Nếu là event_organizer, kiểm tra quyền và không cho phép update status
+    if (currentUser?.roleName === 'event_organizer' && currentUser.id) {
+      // Kiểm tra user có phải owner của organizer không
+      if (
+        !existingEvent.organizer.ownerId ||
+        existingEvent.organizer.ownerId !== currentUser.id
+      ) {
+        throw new ForbiddenException(
+          'You do not have permission to update this event. You are not the owner of this organizer.',
+        );
+      }
+
+      // Organizer không được phép update status
+      if (dto.status !== undefined) {
+        throw new ForbiddenException(
+          'You cannot change event status. Only admin can change event status.',
+        );
+      }
     }
 
     try {
@@ -287,11 +397,12 @@ export class EventService {
         updateData.startTimeRegister = new Date(dto.startTimeRegister);
       if (dto.endTimeRegister !== undefined)
         updateData.endTimeRegister = new Date(dto.endTimeRegister);
-      if (dto.status !== undefined) updateData.status = dto.status;
+      // Chỉ admin mới được update status
+      if (dto.status !== undefined && currentUser?.roleName === 'admin') {
+        updateData.status = dto.status;
+      }
       if (dto.maxCapacity !== undefined)
         updateData.maxCapacity = dto.maxCapacity;
-      if (dto.allowCheckIn !== undefined)
-        updateData.allowCheckIn = dto.allowCheckIn;
       if (dto.organizerId !== undefined)
         updateData.organizerId = dto.organizerId;
       if (dto.venueId !== undefined) updateData.venueId = dto.venueId;
@@ -468,6 +579,21 @@ export class EventService {
               lastName: true,
             },
           },
+          eventStaffs: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  userName: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                  roleName: true,
+                },
+              },
+            },
+          },
         },
       }),
       this.prisma.event.count({ where }),
@@ -508,29 +634,40 @@ export class EventService {
 
     // Check permission: admin can assign to any event, event_organizer only to their own events
     if (currentUser?.roleName === 'event_organizer' && currentUser.userId) {
-      if (
-        !event.organizer.ownerId ||
-        event.organizer.ownerId !== currentUser.userId
-      ) {
+      // Kiểm tra xem user có phải là owner của organizer không
+      if (!event.organizer.ownerId) {
         throw new ForbiddenException(
-          'You do not have permission to assign staff to this event',
+          'This organizer does not have an owner. You cannot assign staff to events of this organizer.',
+        );
+      }
+
+      if (event.organizer.ownerId !== currentUser.userId) {
+        throw new ForbiddenException(
+          'You do not have permission to assign staff to this event. You are not the owner of this organizer.',
         );
       }
     }
     // Admin can assign to any event, so no check needed
 
-    // Check if staff user exists and is a staff role
-    const staff = await this.prisma.user.findUnique({
+    // Check if user exists
+    const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
     });
 
-    if (!staff) {
-      throw new NotFoundException(`Staff with ID ${dto.userId} not found`);
+    if (!user) {
+      throw new NotFoundException(`User with ID ${dto.userId} not found`);
     }
 
-    if (staff.roleName !== 'staff') {
+    // Validate role: only staff can be assigned, not student or other roles
+    if (user.roleName === 'student') {
       throw new BadRequestException(
-        `User with ID ${dto.userId} is not a staff member`,
+        'Cannot assign student to event. Only staff members can be assigned.',
+      );
+    }
+
+    if (user.roleName !== 'staff') {
+      throw new BadRequestException(
+        `User with ID ${dto.userId} is not a staff member. Only staff can be assigned to events.`,
       );
     }
 
@@ -669,6 +806,21 @@ export class EventService {
               email: true,
               firstName: true,
               lastName: true,
+            },
+          },
+          eventStaffs: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  userName: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  avatar: true,
+                  roleName: true,
+                },
+              },
             },
           },
         },

@@ -82,14 +82,6 @@ export class UpdateEventDto {
 
   @ApiPropertyOptional({
     example: true,
-    description: 'Whether check-in is allowed for this event',
-  })
-  @IsOptional()
-  @IsBoolean()
-  allowCheckIn?: boolean;
-
-  @ApiPropertyOptional({
-    example: true,
     description:
       'If true, event is visible to students of all campuses. If false, only students from the event campus can see/register.',
   })

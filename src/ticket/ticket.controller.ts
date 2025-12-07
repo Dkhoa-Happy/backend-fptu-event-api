@@ -119,9 +119,9 @@ export class TicketController {
   }
 
   @Post('scan')
-  @Roles(UserRole.admin, UserRole.staff)
+  @Roles(UserRole.staff)
   @ApiOperation({
-    summary: 'Scan ticket QR code for check-in - Required roles: admin, staff',
+    summary: 'Scan ticket QR code for check-in - Required roles: staff',
     description:
       'Scans a ticket QR code and performs check-in. Updates ticket status to USED if valid, creates check-in log. Uses transaction to ensure data consistency.',
   })

@@ -24,6 +24,7 @@ import {
   ApproveUserDto,
   CreateUserDto,
   QueryUserDto,
+  QueryStaffDto,
   UpdateProfileDto,
   UpdateUserDto,
 } from './dto';
@@ -89,12 +90,14 @@ export class UserController {
   @ApiOperation({
     summary:
       'Get all staff users with pagination and filters - Required roles: event_organizer',
+    description:
+      'Returns only staff users. Role filter is not available as this endpoint only returns staff.',
   })
   @ApiForbiddenResponse({
-    description: 'Forbidden. Required roles: admin',
+    description: 'Forbidden. Required roles: event_organizer',
   })
   @ApiResponse({ status: 200, description: 'List of staff users with meta' })
-  async getStaffs(@Query() query: QueryUserDto) {
+  async getStaffs(@Query() query: QueryStaffDto) {
     return this.userService.getStaffs(query);
   }
 

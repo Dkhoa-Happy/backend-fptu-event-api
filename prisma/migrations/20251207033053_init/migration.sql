@@ -5,13 +5,10 @@ CREATE TYPE "UserRole" AS ENUM ('student', 'admin', 'staff', 'event_organizer');
 CREATE TYPE "UserStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
 -- CreateEnum
-CREATE TYPE "EventStatus" AS ENUM ('DRAFT', 'PENDING', 'PUBLISHED', 'CANCELED');
+CREATE TYPE "EventStatus" AS ENUM ('PENDING', 'PUBLISHED', 'CANCELED');
 
 -- CreateEnum
 CREATE TYPE "TicketStatus" AS ENUM ('VALID', 'USED', 'CANCELLED');
-
--- CreateEnum
-CREATE TYPE "CheckinResult" AS ENUM ('SUCCESS', 'FAIL');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -63,10 +60,9 @@ CREATE TABLE "events" (
     "end_time_register" TIMESTAMP(3) NOT NULL,
     "start_time" TIMESTAMP(3) NOT NULL,
     "end_time" TIMESTAMP(3) NOT NULL,
-    "status" "EventStatus" NOT NULL DEFAULT 'DRAFT',
+    "status" "EventStatus" NOT NULL DEFAULT 'PENDING',
     "max_capacity" INTEGER NOT NULL,
     "registered_count" INTEGER NOT NULL DEFAULT 0,
-    "allow_check_in" BOOLEAN NOT NULL DEFAULT false,
     "is_global" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "host_id" INTEGER NOT NULL,
@@ -167,18 +163,6 @@ CREATE TABLE "tickets" (
 );
 
 -- CreateTable
-CREATE TABLE "checkin_logs" (
-    "id" SERIAL NOT NULL,
-    "checkin_time" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "result" "CheckinResult" NOT NULL,
-    "message" TEXT,
-    "ticket_id" TEXT NOT NULL,
-    "staff_id" INTEGER NOT NULL,
-
-    CONSTRAINT "checkin_logs_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "event_staffs" (
     "id" SERIAL NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -265,12 +249,6 @@ ALTER TABLE "tickets" ADD CONSTRAINT "tickets_user_id_fkey" FOREIGN KEY ("user_i
 
 -- AddForeignKey
 ALTER TABLE "tickets" ADD CONSTRAINT "tickets_seat_id_fkey" FOREIGN KEY ("seat_id") REFERENCES "seats"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "checkin_logs" ADD CONSTRAINT "checkin_logs_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "checkin_logs" ADD CONSTRAINT "checkin_logs_staff_id_fkey" FOREIGN KEY ("staff_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "event_staffs" ADD CONSTRAINT "event_staffs_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

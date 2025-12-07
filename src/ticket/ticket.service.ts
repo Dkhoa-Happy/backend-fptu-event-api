@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -18,6 +19,46 @@ export class TicketService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateTicketDto, userId: number) {
+    // Check if event exists and get registration time
+    const event = await this.prisma.event.findUnique({
+      where: { id: dto.eventId },
+      select: {
+        id: true,
+        title: true,
+        startTimeRegister: true,
+        endTimeRegister: true,
+        status: true,
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${dto.eventId} not found`);
+    }
+
+    // Check if event is published
+    if (event.status !== 'PUBLISHED') {
+      throw new BadRequestException(
+        'Cannot register for this event. Event is not published yet.',
+      );
+    }
+
+    // Check registration time
+    const now = new Date();
+    const startTime = new Date(event.startTimeRegister);
+    const endTime = new Date(event.endTimeRegister);
+
+    if (now < startTime) {
+      throw new BadRequestException(
+        `Registration has not started yet. Registration starts at ${startTime.toISOString()}`,
+      );
+    }
+
+    if (now > endTime) {
+      throw new BadRequestException(
+        `Registration has ended. Registration ended at ${endTime.toISOString()}`,
+      );
+    }
+
     // Check if user already has a ticket for this event
     const existingTicket = await this.prisma.ticket.findFirst({
       where: {
@@ -81,46 +122,60 @@ export class TicketService {
     }
 
     try {
-      const ticket = await this.prisma.ticket.create({
-        data: {
-          qrCode: qrCode!,
-          userId,
-          eventId: dto.eventId,
-          seatId: dto.seatId,
-          status: 'VALID',
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              userName: true,
-              email: true,
-              firstName: true,
-              lastName: true,
+      // Use transaction to ensure data consistency
+      return await this.prisma.$transaction(async (tx) => {
+        // Create ticket
+        const ticket = await tx.ticket.create({
+          data: {
+            qrCode: qrCode!,
+            userId,
+            eventId: dto.eventId,
+            seatId: dto.seatId,
+            status: 'VALID',
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+            event: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                startTime: true,
+                endTime: true,
+                status: true,
+              },
+            },
+            seat: {
+              select: {
+                id: true,
+                rowLabel: true,
+                colLabel: true,
+                seatType: true,
+              },
             },
           },
-          event: {
-            select: {
-              id: true,
-              title: true,
-              description: true,
-              startTime: true,
-              endTime: true,
-              status: true,
-            },
-          },
-          seat: {
-            select: {
-              id: true,
-              rowLabel: true,
-              colLabel: true,
-              seatType: true,
-            },
-          },
-        },
-      });
+        });
 
-      return ticket;
+        // Increment registeredCount of the event
+        await tx.event.update({
+          where: { id: dto.eventId },
+          data: {
+            registeredCount: {
+              increment: 1,
+            },
+          },
+        });
+
+        return ticket;
+      });
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -437,11 +492,25 @@ export class TicketService {
     }
 
     try {
-      await this.prisma.ticket.delete({
-        where: { id },
-      });
+      // Use transaction to ensure data consistency
+      return await this.prisma.$transaction(async (tx) => {
+        // Delete ticket
+        await tx.ticket.delete({
+          where: { id },
+        });
 
-      return { message: `Ticket with ID ${id} has been deleted successfully` };
+        // Decrement registeredCount of the event
+        await tx.event.update({
+          where: { id: ticket.eventId },
+          data: {
+            registeredCount: {
+              decrement: 1,
+            },
+          },
+        });
+
+        return { message: `Ticket with ID ${id} has been deleted successfully` };
+      });
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -506,6 +575,20 @@ export class TicketService {
 
       if (!ticket) {
         throw new NotFoundException(`Ticket with QR code ${qrCode} not found`);
+      }
+
+      // Check if staff is assigned to this event
+      const eventStaff = await tx.eventStaff.findFirst({
+        where: {
+          eventId: ticket.eventId,
+          userId: staffId,
+        },
+      });
+
+      if (!eventStaff) {
+        throw new ForbiddenException(
+          'You are not assigned to this event. Only assigned staff can scan tickets for this event.',
+        );
       }
 
       // Check ticket status
