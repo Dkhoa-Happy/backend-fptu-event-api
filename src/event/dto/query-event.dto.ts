@@ -59,4 +59,12 @@ export class QueryEventDto {
   @IsOptional()
   @IsInt()
   venueId?: number;
+
+  @ApiPropertyOptional({
+    example: 'Technology',
+    description: 'Filter by event category',
+  })
+  @IsOptional()
+  @IsString()
+  category?: string;
 }

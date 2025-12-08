@@ -21,6 +21,14 @@ export class CreateEventDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({
+    example: 'Technology',
+    description: 'Category/event category',
+  })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
   @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
   @IsOptional()
   @IsString()

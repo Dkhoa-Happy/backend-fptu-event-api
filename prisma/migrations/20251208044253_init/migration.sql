@@ -55,6 +55,7 @@ CREATE TABLE "events" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
+    "category" TEXT,
     "banner_url" TEXT,
     "start_time_register" TIMESTAMP(3) NOT NULL,
     "end_time_register" TIMESTAMP(3) NOT NULL,

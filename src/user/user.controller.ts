@@ -163,12 +163,12 @@ export class UserController {
     return this.userService.deactivateUser(id);
   }
 
-  @Patch(':id/approve')
+  @Patch(':id/status')
   @Roles(UserRole.admin)
   @ApiOperation({
-    summary: 'Approve or reject pending user - Required roles: admin',
+    summary: 'Update user status (Approve or Reject) - Required roles: admin',
     description:
-      'Approve (APPROVED) or reject (REJECTED) a user account that is pending approval',
+      'Approve (APPROVED) or reject (REJECTED) a user account that is pending approval. Only PENDING users can have their status changed.',
   })
   @ApiResponse({
     status: 200,
@@ -177,7 +177,7 @@ export class UserController {
   @ApiForbiddenResponse({
     description: 'Forbidden. Required roles: admin',
   })
-  async approveUser(
+  async updateUserStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ApproveUserDto,
   ) {
