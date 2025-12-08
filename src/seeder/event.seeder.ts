@@ -9,7 +9,6 @@ export class EventSeeder implements Seeder {
       })) ?? (await prisma.campus.findFirst());
 
     if (!campus) {
-      // eslint-disable-next-line no-console
       console.warn('No campus found, skip EventSeeder');
       return;
     }
@@ -25,7 +24,6 @@ export class EventSeeder implements Seeder {
     });
 
     if (!staff || !organizerUser || !student) {
-      // eslint-disable-next-line no-console
       console.warn('Required users not found, skip EventSeeder');
       return;
     }
@@ -34,6 +32,8 @@ export class EventSeeder implements Seeder {
       where: { id: 1 },
       update: {
         ownerId: organizerUser.id, // Set ownerId cho organizer
+        logoUrl:
+          'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765203425/591501061_1442644294527717_8695305271568333145_n_nwatou.jpg',
       },
       create: {
         name: 'FU HCM Event Club',
@@ -41,6 +41,8 @@ export class EventSeeder implements Seeder {
         contactEmail: 'organizer@example.com',
         campusId: campus.id,
         ownerId: organizerUser.id, // Set ownerId cho organizer
+        logoUrl:
+          'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765203425/591501061_1442644294527717_8695305271568333145_n_nwatou.jpg',
       },
     });
 
@@ -64,46 +66,192 @@ export class EventSeeder implements Seeder {
     const startTime = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000); // +2 days
     const endTime = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000); // +3 days
 
-    // Check if event already exists by title
-    const existingEvent = await prisma.event.findFirst({
-      where: { title: 'Demo Event - FU HCM' },
-    });
+    const eventsData = [
+      {
+        title: 'FPT Tech Summit 2025',
+        description:
+          'Hội nghị công nghệ thường niên của FPT với các chủ đề AI, Cloud, Security.',
+        category: 'Technology',
+        bannerUrl:
+          'https://i.pinimg.com/736x/f0/0e/20/f00e20a1a907882495d85e263ca5ee9e.jpg',
+        offsetDaysStart: 7,
+        durationHours: 8,
+      },
+      {
+        title: 'Career Fair & Networking Day',
+        description:
+          'Ngày hội việc làm kết nối sinh viên và doanh nghiệp đối tác.',
+        category: 'Career',
+        bannerUrl:
+          'https://i.pinimg.com/1200x/b0/55/48/b0554869cf9198e7011b45b06a6ff351.jpg',
+        offsetDaysStart: 10,
+        durationHours: 6,
+      },
+      {
+        title: 'Innovation & Startup Showcase',
+        description:
+          'Trình diễn sản phẩm khởi nghiệp của sinh viên và CLB Innovation.',
+        category: 'Startup',
+        bannerUrl:
+          'https://i.pinimg.com/736x/cc/d4/d5/ccd4d52eb880a3def9ee3936b92c1360.jpg',
+        offsetDaysStart: 14,
+        durationHours: 5,
+      },
+      {
+        title: 'Data Science Workshop Series',
+        description:
+          'Chuỗi workshop về dữ liệu lớn, phân tích và trực quan hóa.',
+        category: 'Data',
+        bannerUrl:
+          'https://i.pinimg.com/736x/4f/dc/e2/4fdce2ecff9d1d68510d4898aed0c3c4.jpg',
+        offsetDaysStart: 3,
+        durationHours: 4,
+      },
+      {
+        title: 'Green Campus Sustainability Day',
+        description:
+          'Sự kiện truyền thông môi trường, thu gom rác và đổi rác lấy quà.',
+        category: 'Community',
+        bannerUrl:
+          'https://i.pinimg.com/736x/63/ca/6e/63ca6ef17763f60e322d66e61700323c.jpg',
+        offsetDaysStart: 5,
+        durationHours: 3,
+      },
+    ];
 
-    const event = existingEvent
-      ? existingEvent
-      : await prisma.event.create({
+    const createdEvents: { id: string; title: string }[] = [];
+
+    for (const item of eventsData) {
+      const start = new Date(
+        now.getTime() + item.offsetDaysStart * 24 * 60 * 60 * 1000,
+      );
+      const end = new Date(
+        start.getTime() + item.durationHours * 60 * 60 * 1000,
+      );
+      const startReg = new Date(start.getTime() - 3 * 24 * 60 * 60 * 1000);
+      const endReg = new Date(start.getTime() - 12 * 60 * 60 * 1000);
+
+      const existing = await prisma.event.findFirst({
+        where: { title: item.title },
+        select: { id: true, title: true },
+      });
+
+      if (!existing) {
+        const newEvent = await prisma.event.create({
           data: {
-            title: 'Demo Event - FU HCM',
-            description: 'Sample event for seeded student registration',
-            category: 'Technology',
-            bannerUrl: null,
-            startTimeRegister: startRegister,
-            endTimeRegister: endRegister,
-            startTime,
-            endTime,
+            title: item.title,
+            description: item.description,
+            category: item.category,
+            bannerUrl: item.bannerUrl,
+            startTimeRegister: startReg,
+            endTimeRegister: endReg,
+            startTime: start,
+            endTime: end,
             status: EventStatus.PUBLISHED,
-            maxCapacity: 500,
-            registeredCount: 1,
+            maxCapacity: 300,
+            registeredCount: 0,
             hostId: staff.id,
             organizerId: organizer.id,
             venueId: venue.id,
           },
         });
+        createdEvents.push({ id: newEvent.id, title: newEvent.title });
+      } else {
+        createdEvents.push({ id: existing.id, title: existing.title });
+      }
+    }
 
-    // Check if ticket already exists by QR code
-    const existingTicket = await prisma.ticket.findUnique({
-      where: { qrCode: 'QR-STUDENT-DEMO-1' },
-    });
+    // Seed speakers
+    const speakersData = [
+      {
+        name: 'Nguyễn Minh Trí',
+        bio: 'Chuyên gia AI/ML tại FPT Software, 8 năm kinh nghiệm triển khai sản phẩm AI.',
+        avatar:
+          'https://i.pinimg.com/736x/69/78/19/69781905dd57ba144ab71ca4271ab294.jpg',
+        type: 'external',
+        company: 'FPT Software',
+      },
+      {
+        name: 'Lê Thùy Dung',
+        bio: 'Data Scientist, tập trung vào Big Data & BI cho lĩnh vực tài chính.',
+        avatar:
+          'https://i.pinimg.com/736x/8c/6d/db/8c6ddb5fe6600fcc4b183cb2ee228eb7.jpg',
+        type: 'external',
+        company: 'FPT IS',
+      },
+      {
+        name: 'Phạm Anh Khoa',
+        bio: 'Product Manager về nền tảng Cloud & DevOps, chia sẻ về vận hành quy mô lớn.',
+        avatar:
+          'https://i.pinimg.com/736x/da/36/3b/da363b913ed65af5aa1c496011ec4164.jpg',
+        type: 'external',
+        company: 'FPT Cloud',
+      },
+    ];
 
-    if (!existingTicket) {
-      await prisma.ticket.create({
-        data: {
-          qrCode: 'QR-STUDENT-DEMO-1',
-          status: TicketStatus.VALID,
-          eventId: event.id,
-          userId: student.id,
-        },
+    const speakerIds: number[] = [];
+    for (const sp of speakersData) {
+      const existing = await prisma.speaker.findFirst({
+        where: { name: sp.name },
+        select: { id: true },
       });
+      if (existing) {
+        speakerIds.push(existing.id);
+      } else {
+        const created = await prisma.speaker.create({
+          data: {
+            name: sp.name,
+            bio: sp.bio,
+            avatar: sp.avatar,
+            type: sp.type,
+            company: sp.company,
+          },
+          select: { id: true },
+        });
+        speakerIds.push(created.id);
+      }
+    }
+
+    // Gắn 3 speaker vào mỗi event (tránh trùng)
+    for (const ev of createdEvents) {
+      for (const speakerId of speakerIds) {
+        const exists = await prisma.eventSpeaker.findFirst({
+          where: { eventId: ev.id, speakerId },
+        });
+        if (!exists) {
+          await prisma.eventSpeaker.create({
+            data: {
+              eventId: ev.id,
+              speakerId,
+              topic: `Chia sẻ tại ${ev.title}`,
+            },
+          });
+        }
+      }
+    }
+
+    // Gắn một vé demo cho student vào event sớm nhất để hỗ trợ test
+    const targetEvent =
+      (await prisma.event.findFirst({
+        orderBy: { startTime: 'asc' },
+        select: { id: true },
+      })) || null;
+
+    if (targetEvent) {
+      const existingTicket = await prisma.ticket.findUnique({
+        where: { qrCode: 'QR-STUDENT-DEMO-1' },
+      });
+
+      if (!existingTicket) {
+        await prisma.ticket.create({
+          data: {
+            qrCode: 'QR-STUDENT-DEMO-1',
+            status: TicketStatus.VALID,
+            eventId: targetEvent.id,
+            userId: student.id,
+          },
+        });
+      }
     }
   }
 }
