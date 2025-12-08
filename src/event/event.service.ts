@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateEventDto,
   UpdateEventDto,
+  UpdateEventStatusDto,
   QueryEventDto,
   AssignStaffDto,
 } from './dto';
@@ -239,6 +240,23 @@ export class EventService {
               lastName: true,
             },
           },
+          eventSpeakers: {
+            select: {
+              id: true,
+              topic: true,
+              speaker: {
+                select: {
+                  id: true,
+                  name: true,
+                  bio: true,
+                  avatar: true,
+                  type: true,
+                  company: true,
+                  imageUrl: true,
+                },
+              },
+            },
+          },
           // Chỉ include eventStaffs nếu không phải student
           ...(isStudent
             ? {}
@@ -310,6 +328,23 @@ export class EventService {
             email: true,
             firstName: true,
             lastName: true,
+          },
+        },
+        eventSpeakers: {
+          select: {
+            id: true,
+            topic: true,
+            speaker: {
+              select: {
+                id: true,
+                name: true,
+                bio: true,
+                avatar: true,
+                type: true,
+                company: true,
+                imageUrl: true,
+              },
+            },
           },
         },
         // Chỉ include eventStaffs nếu không phải student
@@ -397,12 +432,6 @@ export class EventService {
         );
       }
 
-      // Organizer không được phép update status
-      if (dto.status !== undefined) {
-        throw new ForbiddenException(
-          'You cannot change event status. Only admin can change event status.',
-        );
-      }
     }
 
     try {
@@ -420,10 +449,6 @@ export class EventService {
         updateData.startTimeRegister = new Date(dto.startTimeRegister);
       if (dto.endTimeRegister !== undefined)
         updateData.endTimeRegister = new Date(dto.endTimeRegister);
-      // Chỉ admin mới được update status
-      if (dto.status !== undefined && currentUser?.roleName === 'admin') {
-        updateData.status = dto.status;
-      }
       if (dto.maxCapacity !== undefined)
         updateData.maxCapacity = dto.maxCapacity;
       if (dto.organizerId !== undefined)
@@ -482,6 +507,99 @@ export class EventService {
         (error as { code: string }).code === 'P2002'
       ) {
         throw new BadRequestException('Event with this title already exists');
+      }
+
+      throw error;
+    }
+  }
+
+  async updateEventStatus(
+    id: string,
+    dto: UpdateEventStatusDto,
+  ) {
+    try {
+      const event = await this.prisma.event.findUnique({
+        where: { id },
+      });
+
+      if (!event) {
+        throw new NotFoundException(`Event with ID ${id} not found`);
+      }
+
+      // Chỉ cho phép thay đổi status từ PENDING sang PUBLISHED hoặc CANCELED
+      if (event.status !== EventStatus.PENDING) {
+        throw new BadRequestException(
+          `Event status is ${event.status}. Only PENDING events can be approved or canceled.`,
+        );
+      }
+
+      const updatedEvent = await this.prisma.event.update({
+        where: { id },
+        data: {
+          status: dto.status,
+        },
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              contactEmail: true,
+              logoUrl: true,
+            },
+          },
+          venue: {
+            select: {
+              id: true,
+              name: true,
+              location: true,
+              hasSeats: true,
+            },
+          },
+          host: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          eventSpeakers: {
+            select: {
+              id: true,
+              topic: true,
+              speaker: {
+                select: {
+                  id: true,
+                  name: true,
+                  bio: true,
+                  avatar: true,
+                  type: true,
+                  company: true,
+                  imageUrl: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return {
+        ...updatedEvent,
+        message:
+          dto.status === EventStatus.PUBLISHED
+            ? 'Event approved and published successfully'
+            : 'Event canceled successfully',
+      };
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === 'P2025'
+      ) {
+        throw new NotFoundException(`Event with ID ${id} not found`);
       }
 
       throw error;
@@ -605,6 +723,23 @@ export class EventService {
               email: true,
               firstName: true,
               lastName: true,
+            },
+          },
+          eventSpeakers: {
+            select: {
+              id: true,
+              topic: true,
+              speaker: {
+                select: {
+                  id: true,
+                  name: true,
+                  bio: true,
+                  avatar: true,
+                  type: true,
+                  company: true,
+                  imageUrl: true,
+                },
+              },
             },
           },
           eventStaffs: {
@@ -838,6 +973,23 @@ export class EventService {
               email: true,
               firstName: true,
               lastName: true,
+            },
+          },
+          eventSpeakers: {
+            select: {
+              id: true,
+              topic: true,
+              speaker: {
+                select: {
+                  id: true,
+                  name: true,
+                  bio: true,
+                  avatar: true,
+                  type: true,
+                  company: true,
+                  imageUrl: true,
+                },
+              },
             },
           },
           eventStaffs: {
