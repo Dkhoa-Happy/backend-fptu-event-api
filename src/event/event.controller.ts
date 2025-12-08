@@ -21,6 +21,7 @@ import { EventService } from './event.service';
 import {
   CreateEventDto,
   UpdateEventDto,
+  UpdateEventStatusDto,
   QueryEventDto,
   AssignStaffDto,
 } from './dto';
@@ -186,9 +187,11 @@ export class EventController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.admin, UserRole.event_organizer)
+  @Roles(UserRole.event_organizer)
   @ApiOperation({
-    summary: 'Update event by ID - Required roles: admin, event_organizer',
+    summary: 'Update event by ID - Required roles: event_organizer',
+    description:
+      'Event organizer can update event details but cannot change event status. Admin can also update event details. To change event status, use PATCH /events/:id/status endpoint (admin only).',
   })
   @ApiResponse({
     status: 200,
@@ -211,6 +214,36 @@ export class EventController {
     @GetUser() user: any,
   ) {
     return this.eventService.update(id, dto, user);
+  }
+
+  @Patch(':id/status')
+  @Roles(UserRole.admin)
+  @ApiOperation({
+    summary: 'Approve or cancel event - Required roles: admin',
+    description:
+      'Admin can approve (PUBLISHED) or cancel (CANCELED) a pending event. Only PENDING events can have their status changed.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Event status updated successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Event not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Bad request (e.g., event is not in PENDING status, validation error)',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: admin',
+  })
+  async updateEventStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateEventStatusDto,
+  ) {
+    return this.eventService.updateEventStatus(id, dto);
   }
 
   @Delete(':id')

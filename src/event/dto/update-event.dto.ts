@@ -3,13 +3,11 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsDateString,
-  IsEnum,
   IsInt,
   IsOptional,
   IsString,
   Min,
 } from 'class-validator';
-import { EventStatus } from '@prisma/client';
 
 export class UpdateEventDto {
   @ApiPropertyOptional({ example: 'Tech Conference 2025 Updated' })
@@ -68,15 +66,6 @@ export class UpdateEventDto {
   @IsOptional()
   @IsDateString()
   endTimeRegister?: string;
-
-  @ApiPropertyOptional({
-    example: EventStatus.PUBLISHED,
-    enum: EventStatus,
-    description: 'Event status',
-  })
-  @IsOptional()
-  @IsEnum(EventStatus)
-  status?: EventStatus;
 
   @ApiPropertyOptional({
     example: 150,
