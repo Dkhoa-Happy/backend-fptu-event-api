@@ -7,6 +7,7 @@ import {
 import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CheckinGateway } from '../realtime/checkin.gateway';
 import {
   CreateTicketDto,
   UpdateTicketDto,
@@ -16,7 +17,10 @@ import {
 
 @Injectable()
 export class TicketService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly checkinGateway: CheckinGateway,
+  ) {}
 
   async create(dto: CreateTicketDto, userId: number) {
     // Check if event exists and get registration time
@@ -509,7 +513,9 @@ export class TicketService {
           },
         });
 
-        return { message: `Ticket with ID ${id} has been deleted successfully` };
+        return {
+          message: `Ticket with ID ${id} has been deleted successfully`,
+        };
       });
     } catch (error: unknown) {
       if (
@@ -638,6 +644,16 @@ export class TicketService {
           },
         });
 
+        // Publish realtime check-in event to event room
+        this.checkinGateway.broadcastCheckin(ticket.eventId, {
+          ticketId: updatedTicket.id,
+          eventId: updatedTicket.eventId,
+          user: updatedTicket.user,
+          status: updatedTicket.status,
+          checkinTime: updatedTicket.checkinTime,
+          handledBy: staffId,
+        });
+
         return {
           success: true,
           message: 'Check-in successful',
@@ -648,7 +664,7 @@ export class TicketService {
 
       return {
         success: false,
-        message: `Unknown ticket status: ${ticket.status}`,
+        message: `Unknown ticket status: ${String(ticket.status)}`,
         ticket: null,
       };
     });
