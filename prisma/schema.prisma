@@ -135,6 +135,9 @@ model Event {
   // Quan hệ mới: Staff được mời làm check-in cho Event
   eventStaffs EventStaff[]
 
+  // Notification logs
+  notifications EventNotificationLog[]
+
   @@map("events")
 }
 
@@ -173,7 +176,6 @@ model Speaker {
   avatar        String?
   type          String
   company       String?
-  imageUrl      String?
   createdAt     DateTime       @default(now()) @map("created_at")
   eventSpeakers EventSpeaker[]
 
@@ -280,4 +282,17 @@ model EventStaff {
   // Đảm bảo mỗi user chỉ được add vào 1 event 1 lần
   @@unique([eventId, userId])
   @@map("event_staffs")
+}
+
+// Lưu log thông báo để tránh gửi trùng
+model EventNotificationLog {
+  id      Int      @id @default(autoincrement())
+  eventId String   @map("event_id")
+  type    String // "one_day" | "thirty_min"
+  sentAt  DateTime @default(now()) @map("sent_at")
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([eventId, type], map: "event_notification_unique")
+  @@map("event_notification_logs")
 }

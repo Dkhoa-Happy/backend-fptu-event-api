@@ -33,4 +33,3 @@ export class QuerySpeakerDto {
   @IsString({ message: 'Type must be a string' })
   type?: string;
 }
-

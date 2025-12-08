@@ -1,9 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsOptional,
-  IsString,
-  IsUrl,
-} from 'class-validator';
+import { IsOptional, IsString, IsUrl } from 'class-validator';
 
 export class UpdateSpeakerDto {
   @ApiPropertyOptional({ example: 'John Doe' })
@@ -36,4 +32,3 @@ export class UpdateSpeakerDto {
   @IsString({ message: 'Company must be a string' })
   company?: string;
 }
-
