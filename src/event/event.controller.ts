@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -184,7 +185,7 @@ export class EventController {
     return this.eventService.findOne(id, user);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @Roles(UserRole.admin, UserRole.event_organizer)
   @ApiOperation({
     summary: 'Update event by ID - Required roles: admin, event_organizer',
