@@ -33,6 +33,18 @@ enum TicketStatus {
   CANCELLED
 }
 
+enum IncidentStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model User {
   id               Int        @id @default(autoincrement())
   userName         String     @unique @map("user_name")
@@ -68,6 +80,9 @@ model User {
   // Quan hệ mới: User là Staff thực hiện Check-in
   // Quan hệ mới: User là Staff của Event (được mời làm check-in)
   eventStaffs EventStaff[]
+
+  // Quan hệ: User báo cáo sự cố trước sự kiện
+  incidents Incident[] @relation("IncidentReporter")
 
   // Quan hệ: User là Chủ nhiệm của Organizer
   ownedOrganizers Organizer[] @relation("OrganizerOwner")
@@ -134,6 +149,12 @@ model Event {
 
   // Quan hệ mới: Staff được mời làm check-in cho Event
   eventStaffs EventStaff[]
+
+  // Báo cáo sự cố trước sự kiện
+  incidents Incident[]
+
+  // Tổng kết attendance sau sự kiện
+  summary EventSummary?
 
   // Notification logs
   notifications EventNotificationLog[]
@@ -295,4 +316,39 @@ model EventNotificationLog {
 
   @@unique([eventId, type], map: "event_notification_unique")
   @@map("event_notification_logs")
+}
+
+// Lưu tổng kết attendance sau khi sự kiện kết thúc
+model EventSummary {
+  id               Int      @id @default(autoincrement())
+  eventId          String   @unique @map("event_id")
+  totalRegistered  Int
+  totalAttended    Int
+  totalNoShow      Int
+  generatedAt      DateTime @default(now()) @map("generated_at")
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@map("event_summaries")
+}
+
+// Báo cáo sự cố của Staff cho sự kiện
+model Incident {
+  id          Int              @id @default(autoincrement())
+  title       String
+  description String?
+  severity    IncidentSeverity @default(MEDIUM)
+  status      IncidentStatus   @default(OPEN)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  eventId String @map("event_id")
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  reporterId Int   @map("reporter_id")
+  reporter   User  @relation("IncidentReporter", fields: [reporterId], references: [id])
+
+  @@map("incidents")
+  @@index([eventId])
+  @@index([reporterId])
 }

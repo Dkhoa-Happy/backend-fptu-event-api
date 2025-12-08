@@ -186,6 +186,15 @@ export class EventController {
     return this.eventService.findOne(id, user);
   }
 
+  @Get(':id/summary')
+  @Roles(UserRole.event_organizer)
+  @ApiOperation({
+    summary: 'Get attendance summary after event ends - Roles: event_organizer',
+  })
+  async getSummary(@Param('id') id: string, @GetUser() user: any) {
+    return this.eventService.getSummary(id, user);
+  }
+
   @Patch(':id')
   @Roles(UserRole.event_organizer)
   @ApiOperation({

@@ -12,6 +12,7 @@ import { TicketModule } from './ticket/ticket.module';
 import { SeatModule } from './seat/seat.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { NotificationModule } from './notification/notification.module';
+import { IncidentModule } from './incident/incident.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { NotificationModule } from './notification/notification.module';
     SeatModule,
     FeedbackModule,
     NotificationModule,
+    IncidentModule,
   ],
 })
 export class AppModule {}

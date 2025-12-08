@@ -7,6 +7,7 @@ import {
 import type { Prisma } from '@prisma/client';
 import { EventStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventSummaryService } from './event-summary.service';
 import {
   CreateEventDto,
   UpdateEventDto,
@@ -17,7 +18,10 @@ import {
 
 @Injectable()
 export class EventService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventSummaryService: EventSummaryService,
+  ) {}
 
   async create(
     dto: CreateEventDto,
@@ -1016,5 +1020,51 @@ export class EventService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async getSummary(
+    eventId: string,
+    user: { id?: number; roleName?: string },
+  ) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        endTime: true,
+        organizer: { select: { ownerId: true } },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+
+    const isAdmin = user.roleName === 'admin';
+    const isOrganizerOwner =
+      user.roleName === 'event_organizer' &&
+      !!event.organizer?.ownerId &&
+      event.organizer.ownerId === user.id;
+    const isAssignedStaff =
+      user.roleName === 'staff' &&
+      !!(await this.prisma.eventStaff.findUnique({
+        where: {
+          eventId_userId: {
+            eventId,
+            userId: user.id ?? 0,
+          },
+        },
+      }));
+
+    if (!isAdmin && !isOrganizerOwner && !isAssignedStaff) {
+      throw new ForbiddenException('You are not allowed to view this summary');
+    }
+
+    // Ensure event ended
+    const now = new Date();
+    if (now < new Date(event.endTime)) {
+      throw new BadRequestException('Event has not ended yet');
+    }
+
+    return this.eventSummaryService.getSummary(eventId);
   }
 }

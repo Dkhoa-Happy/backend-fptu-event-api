@@ -10,6 +10,12 @@ CREATE TYPE "EventStatus" AS ENUM ('PENDING', 'PUBLISHED', 'CANCELED');
 -- CreateEnum
 CREATE TYPE "TicketStatus" AS ENUM ('VALID', 'USED', 'CANCELLED');
 
+-- CreateEnum
+CREATE TYPE "IncidentStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'RESOLVED');
+
+-- CreateEnum
+CREATE TYPE "IncidentSeverity" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" SERIAL NOT NULL,
@@ -182,6 +188,33 @@ CREATE TABLE "event_notification_logs" (
     CONSTRAINT "event_notification_logs_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "event_summaries" (
+    "id" SERIAL NOT NULL,
+    "event_id" TEXT NOT NULL,
+    "totalRegistered" INTEGER NOT NULL,
+    "totalAttended" INTEGER NOT NULL,
+    "totalNoShow" INTEGER NOT NULL,
+    "generated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "event_summaries_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "incidents" (
+    "id" SERIAL NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "severity" "IncidentSeverity" NOT NULL DEFAULT 'MEDIUM',
+    "status" "IncidentStatus" NOT NULL DEFAULT 'OPEN',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "event_id" TEXT NOT NULL,
+    "reporter_id" INTEGER NOT NULL,
+
+    CONSTRAINT "incidents_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_user_name_key" ON "users"("user_name");
 
@@ -217,6 +250,15 @@ CREATE UNIQUE INDEX "event_staffs_event_id_user_id_key" ON "event_staffs"("event
 
 -- CreateIndex
 CREATE UNIQUE INDEX "event_notification_unique" ON "event_notification_logs"("event_id", "type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "event_summaries_event_id_key" ON "event_summaries"("event_id");
+
+-- CreateIndex
+CREATE INDEX "incidents_event_id_idx" ON "incidents"("event_id");
+
+-- CreateIndex
+CREATE INDEX "incidents_reporter_id_idx" ON "incidents"("reporter_id");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_campus_id_fkey" FOREIGN KEY ("campus_id") REFERENCES "campuses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -271,3 +313,12 @@ ALTER TABLE "event_staffs" ADD CONSTRAINT "event_staffs_user_id_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "event_notification_logs" ADD CONSTRAINT "event_notification_logs_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_summaries" ADD CONSTRAINT "event_summaries_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "incidents" ADD CONSTRAINT "incidents_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "incidents" ADD CONSTRAINT "incidents_reporter_id_fkey" FOREIGN KEY ("reporter_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
