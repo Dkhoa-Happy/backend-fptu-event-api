@@ -414,4 +414,3 @@ export class SpeakerService {
     return eventSpeakers;
   }
 }
-

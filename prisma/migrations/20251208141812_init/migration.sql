@@ -103,7 +103,6 @@ CREATE TABLE "speakers" (
     "avatar" TEXT,
     "type" TEXT NOT NULL,
     "company" TEXT,
-    "imageUrl" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "speakers_pkey" PRIMARY KEY ("id")
@@ -173,6 +172,16 @@ CREATE TABLE "event_staffs" (
     CONSTRAINT "event_staffs_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "event_notification_logs" (
+    "id" SERIAL NOT NULL,
+    "event_id" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "sent_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "event_notification_logs_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_user_name_key" ON "users"("user_name");
 
@@ -205,6 +214,9 @@ CREATE UNIQUE INDEX "tickets_event_seat_unique" ON "tickets"("event_id", "seat_i
 
 -- CreateIndex
 CREATE UNIQUE INDEX "event_staffs_event_id_user_id_key" ON "event_staffs"("event_id", "user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "event_notification_unique" ON "event_notification_logs"("event_id", "type");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_campus_id_fkey" FOREIGN KEY ("campus_id") REFERENCES "campuses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -256,3 +268,6 @@ ALTER TABLE "event_staffs" ADD CONSTRAINT "event_staffs_event_id_fkey" FOREIGN K
 
 -- AddForeignKey
 ALTER TABLE "event_staffs" ADD CONSTRAINT "event_staffs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_notification_logs" ADD CONSTRAINT "event_notification_logs_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

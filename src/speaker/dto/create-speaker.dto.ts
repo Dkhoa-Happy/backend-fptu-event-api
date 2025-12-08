@@ -1,10 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUrl,
-} from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator';
 
 export class CreateSpeakerDto {
   @ApiProperty({ example: 'John Doe' })
@@ -37,4 +32,3 @@ export class CreateSpeakerDto {
   @IsString({ message: 'Company must be a string' })
   company?: string;
 }
-

@@ -11,6 +11,7 @@ import { UserStatus } from '@prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +19,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -36,21 +38,18 @@ export class AuthService {
       studentCardImage,
     } = dto;
 
-    // Kiểm tra email domain
-    const isFptEmail = email.toLowerCase().endsWith('@fpt.edu.vn');
-
-    // Nếu không phải email FPT, yêu cầu studentCardImage
-    if (!isFptEmail && !studentCardImage) {
+    // Bắt buộc cung cấp hình thẻ sinh viên cho mọi tài khoản đăng ký
+    if (!studentCardImage) {
       throw new BadRequestException(
-        'Student card image is required for non-FPT email addresses',
+        'Student card image is required for account registration',
       );
     }
 
     try {
       const passwordHash = await argon2.hash(password);
 
-      // Xác định status: APPROVED nếu là email FPT, PENDING nếu không
-      const status = isFptEmail ? UserStatus.APPROVED : UserStatus.PENDING;
+      // Tất cả user đăng ký đều PENDING để chờ admin duyệt
+      const status = UserStatus.PENDING;
 
       const user = await this.prisma.user.create({
         data: {
@@ -71,22 +70,20 @@ export class AuthService {
         },
       });
 
-      // Nếu là email FPT, trả về token ngay. Nếu không, thông báo chờ duyệt
-      if (isFptEmail) {
-        const tokens = await this.getTokens(user.id, user.email, user.roleName);
-        await this.updateRefreshToken(user.id, tokens.refreshToken);
-        return {
-          message: 'Register successfully',
-          ...tokens,
-        };
-      } else {
-        return {
-          message:
-            'Registration submitted successfully. Your account is pending approval. Please wait for admin review.',
-          status: 'PENDING',
-          userId: user.id,
-        };
-      }
+      // Gửi email thông báo pending
+      const fullName = `${firstName ?? ''} ${lastName ?? ''}`.trim();
+      await this.emailService.sendUserPendingEmail({
+        email,
+        fullName: fullName || userName || 'user',
+      });
+
+      // Luôn yêu cầu chờ admin duyệt, không cấp token
+      return {
+        message:
+          'Registration submitted successfully. Your account is pending approval. Please wait for admin review.',
+        status: 'PENDING',
+        userId: user.id,
+      };
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -227,8 +224,8 @@ export class AuthService {
         counter++;
       }
 
-      // Xác định status: APPROVED nếu là email FPT, PENDING nếu không
-      const status = isFptEmail ? UserStatus.APPROVED : UserStatus.PENDING;
+      // Tất cả user mới đều PENDING, chờ admin duyệt
+      const status = UserStatus.PENDING;
 
       user = await this.prisma.user.create({
         data: {
@@ -244,12 +241,16 @@ export class AuthService {
         },
       });
 
-      // Nếu không phải email FPT, thông báo chờ duyệt
-      if (!isFptEmail) {
-        throw new UnauthorizedException(
-          'Your account has been created but is pending approval. Please wait for admin review.',
-        );
-      }
+      // Thông báo chờ duyệt cho tất cả tài khoản mới
+      const fullName = `${firstName || ''} ${lastName || ''}`.trim();
+      await this.emailService.sendUserPendingEmail({
+        email,
+        fullName: fullName || userName || 'user',
+      });
+
+      throw new UnauthorizedException(
+        'Your account has been created but is pending approval. Please wait for admin review.',
+      );
     }
 
     const tokens = await this.getTokens(user.id, user.email, user.roleName);

@@ -7,6 +7,7 @@ import * as argon2 from 'argon2';
 import type { Prisma } from '@prisma/client';
 import { UserRole, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import {
   ApproveUserDto,
   CreateUserDto,
@@ -18,7 +19,10 @@ import {
 
 @Injectable()
 export class UserService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   async getMe(userId: number) {
     const user = await this.prisma.user.findUnique({
@@ -402,6 +406,14 @@ export class UserService {
           // Nếu approve, kích hoạt tài khoản
           isActive: dto.status === UserStatus.APPROVED ? true : user.isActive,
         },
+      });
+
+      // Send notification email (best-effort, non-blocking errors propagate)
+      const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+      await this.emailService.sendUserApprovalEmail({
+        email: user.email,
+        fullName: fullName || user.userName || 'user',
+        status: dto.status,
       });
 
       return {

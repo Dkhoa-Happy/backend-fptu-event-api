@@ -21,4 +21,3 @@ export class AssignSpeakerDto {
   @IsString({ message: 'Topic must be a string' })
   topic?: string;
 }
-
