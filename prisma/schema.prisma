@@ -101,6 +101,7 @@ model Event {
   id                String      @id @default(uuid())
   title             String
   description       String?
+  category          String?
   bannerUrl         String?     @map("banner_url")
   startTimeRegister DateTime    @map("start_time_register")
   endTimeRegister   DateTime    @map("end_time_register")

@@ -24,6 +24,14 @@ export class UpdateEventDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({
+    example: 'Technology',
+    description: 'Category/event category',
+  })
+  @IsOptional()
+  @IsString()
+  category?: string;
+
   @ApiPropertyOptional({ example: 'https://example.com/new-banner.jpg' })
   @IsOptional()
   @IsString()
@@ -107,4 +115,3 @@ export class UpdateEventDto {
   @IsInt()
   venueId?: number;
 }
-

@@ -75,6 +75,7 @@ export class EventSeeder implements Seeder {
           data: {
             title: 'Demo Event - FU HCM',
             description: 'Sample event for seeded student registration',
+            category: 'Technology',
             bannerUrl: null,
             startTimeRegister: startRegister,
             endTimeRegister: endRegister,

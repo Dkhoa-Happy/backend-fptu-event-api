@@ -62,6 +62,7 @@ export class EventService {
         data: {
           title: dto.title,
           description: dto.description,
+          category: dto.category,
           bannerUrl: dto.bannerUrl,
           startTime: new Date(dto.startTime),
           endTime: new Date(dto.endTime),
@@ -131,6 +132,7 @@ export class EventService {
       status,
       organizerId,
       venueId,
+      category,
     } = query;
 
     const where: Prisma.EventWhereInput = {};
@@ -157,6 +159,10 @@ export class EventService {
 
     if (venueId) {
       where.venueId = venueId;
+    }
+
+    if (category) {
+      where.category = { contains: category, mode: 'insensitive' };
     }
 
     // Nếu là student: filter theo campus visibility
@@ -405,6 +411,7 @@ export class EventService {
       if (dto.title !== undefined) updateData.title = dto.title;
       if (dto.description !== undefined)
         updateData.description = dto.description;
+      if (dto.category !== undefined) updateData.category = dto.category;
       if (dto.bannerUrl !== undefined) updateData.bannerUrl = dto.bannerUrl;
       if (dto.startTime !== undefined)
         updateData.startTime = new Date(dto.startTime);
@@ -531,6 +538,7 @@ export class EventService {
       status,
       organizerId,
       venueId,
+      category,
     } = query;
 
     const where: Prisma.EventWhereInput = {
@@ -558,6 +566,10 @@ export class EventService {
 
     if (venueId) {
       where.venueId = venueId;
+    }
+
+    if (category) {
+      where.category = { contains: category, mode: 'insensitive' };
     }
 
     const skip = (page - 1) * limit;
@@ -766,7 +778,7 @@ export class EventService {
       };
     }
 
-    const { page = 1, limit = 10, search, status, venueId } = query;
+    const { page = 1, limit = 10, search, status, venueId, category } = query;
 
     const where: Prisma.EventWhereInput = {
       organizerId: {
@@ -787,6 +799,10 @@ export class EventService {
 
     if (venueId) {
       where.venueId = venueId;
+    }
+
+    if (category) {
+      where.category = { contains: category, mode: 'insensitive' };
     }
 
     const skip = (page - 1) * limit;
