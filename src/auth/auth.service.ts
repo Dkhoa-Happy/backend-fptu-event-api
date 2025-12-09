@@ -38,6 +38,18 @@ export class AuthService {
       studentCardImage,
     } = dto;
 
+    // Validate campusId exists
+    const campus = await this.prisma.campus.findUnique({
+      where: { id: campusId },
+      select: { id: true, name: true },
+    });
+
+    if (!campus) {
+      throw new BadRequestException(
+        `Campus with ID ${campusId} does not exist`,
+      );
+    }
+
     // Bắt buộc cung cấp hình thẻ sinh viên cho mọi tài khoản đăng ký
     if (!studentCardImage) {
       throw new BadRequestException(
