@@ -24,6 +24,7 @@ import {
   UpdateEventStatusDto,
   QueryEventDto,
   AssignStaffDto,
+  QueryEventStatsDto,
 } from './dto';
 import { JwtGuard, RolesGuard } from '../auth/guard';
 import { GetUser, Roles } from '../auth/decorator';
@@ -122,6 +123,30 @@ export class EventController {
   })
   async findAll(@Query() query: QueryEventDto, @GetUser() user: any) {
     return this.eventService.findAll(query, user);
+  }
+
+  @Get('stats/monthly')
+  @Roles(
+    UserRole.admin,
+    UserRole.staff,
+    UserRole.event_organizer,
+  )
+  @ApiOperation({
+    summary:
+      'Thống kê số lượng sự kiện theo tháng - Required roles: admin, staff, event_organizer',
+    description:
+      'Trả về số lượng sự kiện được tạo trong từng tháng của năm (mặc định là năm hiện tại). Dữ liệu phù hợp để hiển thị chart.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Thống kê số lượng sự kiện theo tháng',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Forbidden. Required roles: admin, staff, event_organizer',
+  })
+  async getEventStatsByMonth(@Query() query: QueryEventStatsDto) {
+    return this.eventService.getEventStatsByMonth(query);
   }
 
   @Post(':eventId/staff')

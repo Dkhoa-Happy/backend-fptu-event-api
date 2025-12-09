@@ -14,6 +14,7 @@ import {
   UpdateEventStatusDto,
   QueryEventDto,
   AssignStaffDto,
+  QueryEventStatsDto,
 } from './dto';
 
 @Injectable()
@@ -1066,5 +1067,44 @@ export class EventService {
     }
 
     return this.eventSummaryService.getSummary(eventId);
+  }
+
+  async getEventStatsByMonth(query: QueryEventStatsDto) {
+    const year = query.year ?? new Date().getFullYear();
+    
+    // Tạo mảng 12 tháng với giá trị mặc định là 0
+    const monthlyStats = Array.from({ length: 12 }, (_, index) => ({
+      month: index + 1,
+      monthLabel: `T${index + 1}`,
+      count: 0,
+    }));
+
+    // Lấy tất cả events trong năm, group by tháng
+    // Sử dụng Prisma raw query để group by tháng từ createdAt
+    const events = await this.prisma.$queryRaw<
+      Array<{ month: number; count: bigint }>
+    >`
+      SELECT 
+        EXTRACT(MONTH FROM created_at)::int as month,
+        COUNT(*)::bigint as count
+      FROM events
+      WHERE EXTRACT(YEAR FROM created_at) = ${year}
+      GROUP BY EXTRACT(MONTH FROM created_at)
+      ORDER BY month ASC
+    `;
+
+    // Cập nhật số lượng sự kiện cho từng tháng
+    events.forEach((item) => {
+      const monthIndex = item.month - 1;
+      if (monthIndex >= 0 && monthIndex < 12) {
+        monthlyStats[monthIndex].count = Number(item.count);
+      }
+    });
+
+    return {
+      year,
+      data: monthlyStats,
+      total: monthlyStats.reduce((sum, item) => sum + item.count, 0),
+    };
   }
 }

@@ -78,10 +78,11 @@ export class UserService {
 
     try {
       const passwordHash = await argon2.hash(password);
-      
+
       // Admin accounts are automatically APPROVED, others are PENDING
-      const status = roleName === UserRole.admin ? UserStatus.APPROVED : UserStatus.PENDING;
-      
+      const status =
+        roleName === UserRole.admin ? UserStatus.APPROVED : UserStatus.PENDING;
+
       const user = await this.prisma.user.create({
         data: {
           userName,
@@ -425,7 +426,10 @@ export class UserService {
         user: this.excludePassword(updatedUser),
       };
     } catch (error: unknown) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
         throw error;
       }
 

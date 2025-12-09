@@ -148,7 +148,7 @@ export class EventSeeder implements Seeder {
             startTime: start,
             endTime: end,
             status: EventStatus.PUBLISHED,
-            maxCapacity: 300,
+            maxCapacity: 5,
             registeredCount: 0,
             hostId: staff.id,
             organizerId: organizer.id,
