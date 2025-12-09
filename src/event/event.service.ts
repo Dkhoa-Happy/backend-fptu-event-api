@@ -634,10 +634,7 @@ export class EventService {
     }
 
     // Check if registration ends before event starts
-    if (
-      dto.endTimeRegister !== undefined ||
-      dto.startTime !== undefined
-    ) {
+    if (dto.endTimeRegister !== undefined || dto.startTime !== undefined) {
       if (finalEndTimeRegister >= finalStartTime) {
         throw new BadRequestException(
           'Registration must end before the event starts',
@@ -646,10 +643,7 @@ export class EventService {
     }
 
     // Check if registration start is before event start
-    if (
-      dto.startTimeRegister !== undefined ||
-      dto.startTime !== undefined
-    ) {
+    if (dto.startTimeRegister !== undefined || dto.startTime !== undefined) {
       if (finalStartTimeRegister >= finalStartTime) {
         throw new BadRequestException(
           'Registration start time must be before event start time',
@@ -674,14 +668,10 @@ export class EventService {
     // Validate maxCapacity if being updated
     if (dto.maxCapacity !== undefined) {
       if (dto.maxCapacity < 1) {
-        throw new BadRequestException(
-          'Maximum capacity must be at least 1',
-        );
+        throw new BadRequestException('Maximum capacity must be at least 1');
       }
       if (dto.maxCapacity > 10000) {
-        throw new BadRequestException(
-          'Maximum capacity cannot exceed 10000',
-        );
+        throw new BadRequestException('Maximum capacity cannot exceed 10000');
       }
     }
 
