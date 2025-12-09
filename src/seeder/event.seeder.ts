@@ -322,29 +322,5 @@ export class EventSeeder implements Seeder {
         }
       }
     }
-
-    // Gắn một vé demo cho student vào event sớm nhất để hỗ trợ test
-    const targetEvent =
-      (await prisma.event.findFirst({
-        orderBy: { startTime: 'asc' },
-        select: { id: true },
-      })) || null;
-
-    if (targetEvent) {
-      const existingTicket = await prisma.ticket.findUnique({
-        where: { qrCode: 'QR-STUDENT-DEMO-1' },
-      });
-
-      if (!existingTicket) {
-        await prisma.ticket.create({
-          data: {
-            qrCode: 'QR-STUDENT-DEMO-1',
-            status: TicketStatus.VALID,
-            eventId: targetEvent.id,
-            userId: student.id,
-          },
-        });
-      }
-    }
   }
 }
