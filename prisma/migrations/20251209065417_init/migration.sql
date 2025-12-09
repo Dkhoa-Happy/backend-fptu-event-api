@@ -136,6 +136,7 @@ CREATE TABLE "seats" (
     "col_label" INTEGER NOT NULL,
     "seat_type" TEXT NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "is_booked" BOOLEAN NOT NULL DEFAULT false,
     "venue_id" INTEGER NOT NULL,
 
     CONSTRAINT "seats_pkey" PRIMARY KEY ("id")

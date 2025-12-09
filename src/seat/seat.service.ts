@@ -23,6 +23,7 @@ export class SeatService {
           colLabel: true,
           seatType: true,
           isActive: true,
+          isBooked: true,
         },
         orderBy: [{ rowLabel: 'asc' }, { colLabel: 'asc' }],
       });
@@ -50,6 +51,7 @@ export class SeatService {
           seatType: true,
           isActive: true,
           venueId: true,
+          isBooked: true,
         },
       });
 
