@@ -230,6 +230,7 @@ model Seat {
   colLabel Int     @map("col_label")
   seatType String  @map("seat_type")
   isActive Boolean @default(true) @map("is_active")
+  isBooked Boolean @default(false) @map("is_booked")
 
   venueId Int   @map("venue_id")
   venue   Venue @relation(fields: [venueId], references: [id])
