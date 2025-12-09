@@ -7,11 +7,16 @@ import {
   IsOptional,
   IsString,
   Min,
+  Max,
+  MinLength,
+  MaxLength,
 } from 'class-validator';
 
 export class CreateEventDto {
   @ApiProperty({ example: 'Tech Conference 2025' })
   @IsString()
+  @MinLength(1, { message: 'Title cannot be empty' })
+  @MaxLength(200, { message: 'Title must not exceed 200 characters' })
   title: string;
 
   @ApiPropertyOptional({
@@ -65,7 +70,8 @@ export class CreateEventDto {
   @ApiProperty({ example: 100, description: 'Maximum capacity of the event' })
   @Type(() => Number)
   @IsInt()
-  @Min(1)
+  @Min(1, { message: 'Maximum capacity must be at least 1' })
+  @Max(10000, { message: 'Maximum capacity cannot exceed 10000' })
   maxCapacity: number;
 
   @ApiPropertyOptional({

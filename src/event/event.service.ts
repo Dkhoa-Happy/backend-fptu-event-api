@@ -28,6 +28,18 @@ export class EventService {
     dto: CreateEventDto,
     currentUser?: { id?: number; roleName?: string },
   ) {
+    // Validate organizer exists and check permissions
+    const organizer = await this.prisma.organizer.findUnique({
+      where: { id: dto.organizerId },
+      select: { id: true, ownerId: true },
+    });
+
+    if (!organizer) {
+      throw new NotFoundException(
+        `Organizer with ID ${dto.organizerId} not found`,
+      );
+    }
+
     // Nếu là event_organizer, kiểm tra xem họ có phải owner của organizer không
     if (currentUser?.roleName === 'event_organizer' && currentUser.id) {
       // Kiểm tra user có phải là owner của ít nhất 1 organizer không
@@ -44,23 +56,132 @@ export class EventService {
         );
       }
 
-      // Kiểm tra organizer được chọn có tồn tại và user có phải owner không
-      const organizer = await this.prisma.organizer.findUnique({
-        where: { id: dto.organizerId },
-        select: { ownerId: true },
-      });
-
-      if (!organizer) {
-        throw new NotFoundException(
-          `Organizer with ID ${dto.organizerId} not found`,
-        );
-      }
-
       if (!organizer.ownerId || organizer.ownerId !== currentUser.id) {
         throw new ForbiddenException(
           'You do not have permission to create events for this organizer. You are not the owner of this organizer.',
         );
       }
+    }
+
+    // Validate venue exists if provided
+    if (dto.venueId) {
+      const venue = await this.prisma.venue.findUnique({
+        where: { id: dto.venueId },
+        select: { id: true, status: true },
+      });
+
+      if (!venue) {
+        throw new NotFoundException(`Venue with ID ${dto.venueId} not found`);
+      }
+
+      // Check venue status (case-insensitive)
+      if (venue.status.toUpperCase() !== 'ACTIVE') {
+        throw new BadRequestException(
+          `Venue with ID ${dto.venueId} is not active`,
+        );
+      }
+
+      // Check for venue time conflict with existing events
+      // Only check PUBLISHED and PENDING events (ignore CANCELED)
+      const conflictingEvent = await this.prisma.event.findFirst({
+        where: {
+          venueId: dto.venueId,
+          status: {
+            in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+          },
+          // Check if time ranges overlap
+          OR: [
+            // New event starts during existing event
+            {
+              AND: [
+                { startTime: { lte: new Date(dto.startTime) } },
+                { endTime: { gt: new Date(dto.startTime) } },
+              ],
+            },
+            // New event ends during existing event
+            {
+              AND: [
+                { startTime: { lt: new Date(dto.endTime) } },
+                { endTime: { gte: new Date(dto.endTime) } },
+              ],
+            },
+            // New event completely contains existing event
+            {
+              AND: [
+                { startTime: { gte: new Date(dto.startTime) } },
+                { endTime: { lte: new Date(dto.endTime) } },
+              ],
+            },
+            // Existing event completely contains new event
+            {
+              AND: [
+                { startTime: { lte: new Date(dto.startTime) } },
+                { endTime: { gte: new Date(dto.endTime) } },
+              ],
+            },
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+        },
+      });
+
+      if (conflictingEvent) {
+        throw new BadRequestException(
+          `Venue đã được đặt cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Vui lòng chọn thời gian khác hoặc venue khác.`,
+        );
+      }
+    }
+
+    // Validate time relationships
+    const startTime = new Date(dto.startTime);
+    const endTime = new Date(dto.endTime);
+    const startTimeRegister = new Date(dto.startTimeRegister);
+    const endTimeRegister = new Date(dto.endTimeRegister);
+    const now = new Date();
+
+    // Check if startTime is before endTime
+    if (startTime >= endTime) {
+      throw new BadRequestException(
+        'Event start time must be before event end time',
+      );
+    }
+
+    // Check if startTimeRegister is before endTimeRegister
+    if (startTimeRegister >= endTimeRegister) {
+      throw new BadRequestException(
+        'Registration start time must be before registration end time',
+      );
+    }
+
+    // Check if registration ends before event starts
+    if (endTimeRegister >= startTime) {
+      throw new BadRequestException(
+        'Registration must end before the event starts',
+      );
+    }
+
+    // Check if registration start is before event start
+    if (startTimeRegister >= startTime) {
+      throw new BadRequestException(
+        'Registration start time must be before event start time',
+      );
+    }
+
+    // Optional: Check if event is in the past (you may want to allow this for testing)
+    // if (startTime < now) {
+    //   throw new BadRequestException('Event start time cannot be in the past');
+    // }
+
+    // Validate title is not just whitespace
+    if (!dto.title.trim()) {
+      throw new BadRequestException(
+        'Event title cannot be empty or whitespace',
+      );
     }
 
     try {
@@ -74,7 +195,7 @@ export class EventService {
           endTime: new Date(dto.endTime),
           startTimeRegister: new Date(dto.startTimeRegister),
           endTimeRegister: new Date(dto.endTimeRegister),
-          status: 'PENDING', // Always PENDING when creating, requires admin approval
+          status: 'PENDING',
           maxCapacity: dto.maxCapacity,
           isGlobal: dto.isGlobal ?? false,
           organizerId: dto.organizerId,
@@ -434,7 +555,72 @@ export class EventService {
           'You do not have permission to update this event. You are not the owner of this organizer.',
         );
       }
+    }
 
+    // Validate venue time conflict if venue or time is being updated
+    const finalVenueId = dto.venueId ?? existingEvent.venueId;
+    const finalStartTime = dto.startTime
+      ? new Date(dto.startTime)
+      : existingEvent.startTime;
+    const finalEndTime = dto.endTime
+      ? new Date(dto.endTime)
+      : existingEvent.endTime;
+
+    if (finalVenueId) {
+      // Check for venue time conflict with other events (exclude current event)
+      const conflictingEvent = await this.prisma.event.findFirst({
+        where: {
+          venueId: finalVenueId,
+          id: { not: id }, // Exclude current event
+          status: {
+            in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+          },
+          // Check if time ranges overlap
+          OR: [
+            // New event starts during existing event
+            {
+              AND: [
+                { startTime: { lte: finalStartTime } },
+                { endTime: { gt: finalStartTime } },
+              ],
+            },
+            // New event ends during existing event
+            {
+              AND: [
+                { startTime: { lt: finalEndTime } },
+                { endTime: { gte: finalEndTime } },
+              ],
+            },
+            // New event completely contains existing event
+            {
+              AND: [
+                { startTime: { gte: finalStartTime } },
+                { endTime: { lte: finalEndTime } },
+              ],
+            },
+            // Existing event completely contains new event
+            {
+              AND: [
+                { startTime: { lte: finalStartTime } },
+                { endTime: { gte: finalEndTime } },
+              ],
+            },
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+        },
+      });
+
+      if (conflictingEvent) {
+        throw new BadRequestException(
+          `Venue đã được đặt cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Vui lòng chọn thời gian khác hoặc venue khác.`,
+        );
+      }
     }
 
     try {
@@ -516,10 +702,7 @@ export class EventService {
     }
   }
 
-  async updateEventStatus(
-    id: string,
-    dto: UpdateEventStatusDto,
-  ) {
+  async updateEventStatus(id: string, dto: UpdateEventStatusDto) {
     try {
       const event = await this.prisma.event.findUnique({
         where: { id },
@@ -1023,10 +1206,7 @@ export class EventService {
     };
   }
 
-  async getSummary(
-    eventId: string,
-    user: { id?: number; roleName?: string },
-  ) {
+  async getSummary(eventId: string, user: { id?: number; roleName?: string }) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: {
@@ -1071,7 +1251,7 @@ export class EventService {
 
   async getEventStatsByMonth(query: QueryEventStatsDto) {
     const year = query.year ?? new Date().getFullYear();
-    
+
     // Tạo mảng 12 tháng với giá trị mặc định là 0
     const monthlyStats = Array.from({ length: 12 }, (_, index) => ({
       month: index + 1,

@@ -31,6 +31,7 @@ enum TicketStatus {
   VALID
   USED
   CANCELLED
+  EXPIRED
 }
 
 enum IncidentStatus {
@@ -320,12 +321,12 @@ model EventNotificationLog {
 
 // Lưu tổng kết attendance sau khi sự kiện kết thúc
 model EventSummary {
-  id               Int      @id @default(autoincrement())
-  eventId          String   @unique @map("event_id")
-  totalRegistered  Int
-  totalAttended    Int
-  totalNoShow      Int
-  generatedAt      DateTime @default(now()) @map("generated_at")
+  id              Int      @id @default(autoincrement())
+  eventId         String   @unique @map("event_id")
+  totalRegistered Int
+  totalAttended   Int
+  totalNoShow     Int
+  generatedAt     DateTime @default(now()) @map("generated_at")
 
   event Event @relation(fields: [eventId], references: [id])
 
@@ -345,10 +346,10 @@ model Incident {
   eventId String @map("event_id")
   event   Event  @relation(fields: [eventId], references: [id])
 
-  reporterId Int   @map("reporter_id")
-  reporter   User  @relation("IncidentReporter", fields: [reporterId], references: [id])
+  reporterId Int  @map("reporter_id")
+  reporter   User @relation("IncidentReporter", fields: [reporterId], references: [id])
 
-  @@map("incidents")
   @@index([eventId])
   @@index([reporterId])
+  @@map("incidents")
 }

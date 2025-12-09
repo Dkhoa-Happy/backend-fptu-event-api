@@ -23,6 +23,20 @@ export class TicketService {
   ) {}
 
   async create(dto: CreateTicketDto, userId: number) {
+    // Get user info to check campus
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        campusId: true,
+        roleName: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
     // Check if event exists and get registration time
     const event = await this.prisma.event.findUnique({
       where: { id: dto.eventId },
@@ -32,6 +46,15 @@ export class TicketService {
         startTimeRegister: true,
         endTimeRegister: true,
         status: true,
+        maxCapacity: true,
+        registeredCount: true,
+        isGlobal: true,
+        venue: {
+          select: {
+            id: true,
+            campusId: true,
+          },
+        },
       },
     });
 
@@ -43,6 +66,30 @@ export class TicketService {
     if (event.status !== 'PUBLISHED') {
       throw new BadRequestException(
         'Cannot register for this event. Event is not published yet.',
+      );
+    }
+
+    // Check campus restriction for non-global events
+    if (!event.isGlobal) {
+      // If event is not global, student must be from the same campus as the venue
+      if (!event.venue) {
+        throw new BadRequestException(
+          'Event không có venue. Không thể đăng ký sự kiện này.',
+        );
+      }
+
+      if (user.campusId !== event.venue.campusId) {
+        throw new ForbiddenException(
+          'Bạn không thể đăng ký sự kiện này. Sự kiện chỉ dành cho sinh viên thuộc campus của venue.',
+        );
+      }
+    }
+    // If isGlobal = true, allow all students from any campus
+
+    // Check if event has reached max capacity
+    if (event.registeredCount >= event.maxCapacity) {
+      throw new BadRequestException(
+        `Sự kiện đã đạt số lượng tối đa (${event.maxCapacity} người). Không thể đăng ký thêm.`,
       );
     }
 
@@ -128,6 +175,25 @@ export class TicketService {
     try {
       // Use transaction to ensure data consistency
       return await this.prisma.$transaction(async (tx) => {
+        // Double-check capacity within transaction to prevent race condition
+        const currentEvent = await tx.event.findUnique({
+          where: { id: dto.eventId },
+          select: {
+            maxCapacity: true,
+            registeredCount: true,
+          },
+        });
+
+        if (!currentEvent) {
+          throw new NotFoundException(`Event with ID ${dto.eventId} not found`);
+        }
+
+        if (currentEvent.registeredCount >= currentEvent.maxCapacity) {
+          throw new BadRequestException(
+            `Sự kiện đã đạt số lượng tối đa (${currentEvent.maxCapacity} người). Không thể đăng ký thêm.`,
+          );
+        }
+
         // Create ticket
         const ticket = await tx.ticket.create({
           data: {
@@ -372,8 +438,38 @@ export class TicketService {
       this.prisma.ticket.count({ where }),
     ]);
 
+    // Auto-update expired tickets
+    await this.updateExpiredTickets(items);
+
+    // Reload items to get updated status
+    const updatedItems = await this.prisma.ticket.findMany({
+      where: {
+        id: { in: items.map((item) => item.id) },
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+            organizer: {
+              select: {
+                id: true,
+                name: true,
+                logoUrl: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { bookingDate: 'desc' },
+    });
+
     return {
-      data: items,
+      data: updatedItems,
       meta: {
         total,
         page,
@@ -420,7 +516,43 @@ export class TicketService {
       throw new NotFoundException(`Ticket with QR code ${qrCode} not found`);
     }
 
-    return ticket;
+    // Check and update expired tickets
+    await this.checkAndUpdateExpiredTicket(ticket.id, ticket.event.endTime);
+
+    // Reload ticket to get updated status
+    const updatedTicket = await this.prisma.ticket.findUnique({
+      where: { qrCode },
+      include: {
+        user: {
+          select: {
+            id: true,
+            userName: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        event: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+            organizer: {
+              select: {
+                id: true,
+                name: true,
+                logoUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return updatedTicket!;
   }
 
   async update(id: string, dto: UpdateTicketDto) {
@@ -597,6 +729,17 @@ export class TicketService {
         );
       }
 
+      // Check if ticket is expired (event has ended)
+      const now = new Date();
+      if (new Date(ticket.event.endTime) < now && ticket.status === 'VALID') {
+        // Auto-update expired ticket
+        await tx.ticket.update({
+          where: { id: ticket.id },
+          data: { status: 'EXPIRED' },
+        });
+        ticket.status = 'EXPIRED';
+      }
+
       // Check ticket status
       if (ticket.status === 'USED') {
         return {
@@ -610,6 +753,14 @@ export class TicketService {
         return {
           success: false,
           message: 'Ticket cancelled',
+          ticket: null,
+        };
+      }
+
+      if (ticket.status === 'EXPIRED') {
+        return {
+          success: false,
+          message: 'Ticket expired. Event has ended.',
           ticket: null,
         };
       }
@@ -668,5 +819,51 @@ export class TicketService {
         ticket: null,
       };
     });
+  }
+
+  /**
+   * Check and update expired tickets (event has ended)
+   * Only updates VALID tickets that have passed event end time
+   */
+  private async checkAndUpdateExpiredTicket(
+    ticketId: string,
+    eventEndTime: Date,
+  ): Promise<void> {
+    const now = new Date();
+    if (now > new Date(eventEndTime)) {
+      await this.prisma.ticket.updateMany({
+        where: {
+          id: ticketId,
+          status: 'VALID',
+        },
+        data: {
+          status: 'EXPIRED',
+        },
+      });
+    }
+  }
+
+  /**
+   * Batch update expired tickets for multiple tickets
+   */
+  private async updateExpiredTickets(
+    tickets: Array<{ id: string; event: { endTime: Date } }>,
+  ): Promise<void> {
+    const now = new Date();
+    const expiredTicketIds = tickets
+      .filter((t) => t.event && new Date(t.event.endTime) < now)
+      .map((t) => t.id);
+
+    if (expiredTicketIds.length > 0) {
+      await this.prisma.ticket.updateMany({
+        where: {
+          id: { in: expiredTicketIds },
+          status: 'VALID',
+        },
+        data: {
+          status: 'EXPIRED',
+        },
+      });
+    }
   }
 }

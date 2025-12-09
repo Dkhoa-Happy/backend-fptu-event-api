@@ -56,7 +56,7 @@ export class EventSeeder implements Seeder {
         column: 10,
         hasSeats: true,
         campusId: campus.id,
-        status: 'Active',
+        status: 'ACTIVE',
       },
     });
 
@@ -119,8 +119,58 @@ export class EventSeeder implements Seeder {
       },
     ];
 
+    // Global events - visible to all campuses
+    const globalEventsData = [
+      {
+        title: 'FPT University National Conference 2025',
+        description:
+          'Hội nghị toàn quốc của FPT University với sự tham gia của tất cả các campus. Chủ đề: "Digital Transformation in Education".',
+        category: 'Education',
+        bannerUrl:
+          'https://i.pinimg.com/736x/f0/0e/20/f00e20a1a907882495d85e263ca5ee9e.jpg',
+        offsetDaysStart: 20,
+        durationHours: 8,
+        isGlobal: true,
+      },
+      {
+        title: 'FPT Alumni Global Meetup',
+        description:
+          'Gặp gỡ cựu sinh viên FPT từ khắp các campus, chia sẻ kinh nghiệm và networking.',
+        category: 'Networking',
+        bannerUrl:
+          'https://i.pinimg.com/1200x/b0/55/48/b0554869cf9198e7011b45b06a6ff351.jpg',
+        offsetDaysStart: 25,
+        durationHours: 6,
+        isGlobal: true,
+      },
+      {
+        title: 'FPT Hackathon 2025 - Online Edition',
+        description:
+          'Cuộc thi lập trình trực tuyến dành cho tất cả sinh viên FPT. Giải thưởng hấp dẫn!',
+        category: 'Competition',
+        bannerUrl:
+          'https://i.pinimg.com/736x/cc/d4/d5/ccd4d52eb880a3def9ee3936b92c1360.jpg',
+        offsetDaysStart: 30,
+        durationHours: 48,
+        isGlobal: true,
+        venueId: null, // Online event
+      },
+      {
+        title: 'FPT Leadership Summit',
+        description:
+          'Hội nghị lãnh đạo sinh viên toàn hệ thống FPT University. Chia sẻ kinh nghiệm quản lý CLB và tổ chức sự kiện.',
+        category: 'Leadership',
+        bannerUrl:
+          'https://i.pinimg.com/736x/4f/dc/e2/4fdce2ecff9d1d68510d4898aed0c3c4.jpg',
+        offsetDaysStart: 35,
+        durationHours: 6,
+        isGlobal: true,
+      },
+    ];
+
     const createdEvents: { id: string; title: string }[] = [];
 
+    // Seed local events (isGlobal = false)
     for (const item of eventsData) {
       const start = new Date(
         now.getTime() + item.offsetDaysStart * 24 * 60 * 60 * 1000,
@@ -150,9 +200,52 @@ export class EventSeeder implements Seeder {
             status: EventStatus.PUBLISHED,
             maxCapacity: 5,
             registeredCount: 0,
+            isGlobal: false,
             hostId: staff.id,
             organizerId: organizer.id,
             venueId: venue.id,
+          },
+        });
+        createdEvents.push({ id: newEvent.id, title: newEvent.title });
+      } else {
+        createdEvents.push({ id: existing.id, title: existing.title });
+      }
+    }
+
+    // Seed global events (isGlobal = true)
+    for (const item of globalEventsData) {
+      const start = new Date(
+        now.getTime() + item.offsetDaysStart * 24 * 60 * 60 * 1000,
+      );
+      const end = new Date(
+        start.getTime() + item.durationHours * 60 * 60 * 1000,
+      );
+      const startReg = new Date(start.getTime() - 3 * 24 * 60 * 60 * 1000);
+      const endReg = new Date(start.getTime() - 12 * 60 * 60 * 1000);
+
+      const existing = await prisma.event.findFirst({
+        where: { title: item.title },
+        select: { id: true, title: true },
+      });
+
+      if (!existing) {
+        const newEvent = await prisma.event.create({
+          data: {
+            title: item.title,
+            description: item.description,
+            category: item.category,
+            bannerUrl: item.bannerUrl,
+            startTimeRegister: startReg,
+            endTimeRegister: endReg,
+            startTime: start,
+            endTime: end,
+            status: EventStatus.PUBLISHED,
+            maxCapacity: 100,
+            registeredCount: 0,
+            isGlobal: item.isGlobal ?? true,
+            hostId: staff.id,
+            organizerId: organizer.id,
+            venueId: item.venueId ?? venue.id,
           },
         });
         createdEvents.push({ id: newEvent.id, title: newEvent.title });
