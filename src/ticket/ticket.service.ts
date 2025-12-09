@@ -416,6 +416,16 @@ export class TicketService {
         take: limit,
         orderBy: { bookingDate: 'desc' },
         include: {
+          seat: {
+            select: {
+              id: true,
+              rowLabel: true,
+              colLabel: true,
+              seatType: true,
+              isActive: true,
+              venueId: true,
+            },
+          },
           event: {
             select: {
               id: true,
@@ -447,6 +457,16 @@ export class TicketService {
         id: { in: items.map((item) => item.id) },
       },
       include: {
+        seat: {
+          select: {
+            id: true,
+            rowLabel: true,
+            colLabel: true,
+            seatType: true,
+            isActive: true,
+            venueId: true,
+          },
+        },
         event: {
           select: {
             id: true,

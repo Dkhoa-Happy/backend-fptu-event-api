@@ -557,15 +557,135 @@ export class EventService {
       }
     }
 
-    // Validate venue time conflict if venue or time is being updated
+    // Validate organizer if being updated
+    if (dto.organizerId !== undefined) {
+      const organizer = await this.prisma.organizer.findUnique({
+        where: { id: dto.organizerId },
+        select: { id: true, ownerId: true },
+      });
+
+      if (!organizer) {
+        throw new NotFoundException(
+          `Organizer with ID ${dto.organizerId} not found`,
+        );
+      }
+
+      // If event_organizer, check permission for new organizer
+      if (currentUser?.roleName === 'event_organizer' && currentUser.id) {
+        if (!organizer.ownerId || organizer.ownerId !== currentUser.id) {
+          throw new ForbiddenException(
+            'You do not have permission to change event to this organizer. You are not the owner of this organizer.',
+          );
+        }
+      }
+    }
+
+    // Validate venue if being updated
     const finalVenueId = dto.venueId ?? existingEvent.venueId;
+    if (dto.venueId !== undefined && dto.venueId !== null) {
+      const venue = await this.prisma.venue.findUnique({
+        where: { id: dto.venueId },
+        select: { id: true, status: true },
+      });
+
+      if (!venue) {
+        throw new NotFoundException(`Venue with ID ${dto.venueId} not found`);
+      }
+
+      if (venue.status.toUpperCase() !== 'ACTIVE') {
+        throw new BadRequestException(
+          `Venue with ID ${dto.venueId} is not active`,
+        );
+      }
+    }
+
+    // Validate time relationships if time fields are being updated
     const finalStartTime = dto.startTime
       ? new Date(dto.startTime)
       : existingEvent.startTime;
     const finalEndTime = dto.endTime
       ? new Date(dto.endTime)
       : existingEvent.endTime;
+    const finalStartTimeRegister = dto.startTimeRegister
+      ? new Date(dto.startTimeRegister)
+      : existingEvent.startTimeRegister;
+    const finalEndTimeRegister = dto.endTimeRegister
+      ? new Date(dto.endTimeRegister)
+      : existingEvent.endTimeRegister;
 
+    // Validate time relationships
+    if (dto.startTime !== undefined || dto.endTime !== undefined) {
+      if (finalStartTime >= finalEndTime) {
+        throw new BadRequestException(
+          'Event start time must be before event end time',
+        );
+      }
+    }
+
+    if (
+      dto.startTimeRegister !== undefined ||
+      dto.endTimeRegister !== undefined
+    ) {
+      if (finalStartTimeRegister >= finalEndTimeRegister) {
+        throw new BadRequestException(
+          'Registration start time must be before registration end time',
+        );
+      }
+    }
+
+    // Check if registration ends before event starts
+    if (
+      dto.endTimeRegister !== undefined ||
+      dto.startTime !== undefined
+    ) {
+      if (finalEndTimeRegister >= finalStartTime) {
+        throw new BadRequestException(
+          'Registration must end before the event starts',
+        );
+      }
+    }
+
+    // Check if registration start is before event start
+    if (
+      dto.startTimeRegister !== undefined ||
+      dto.startTime !== undefined
+    ) {
+      if (finalStartTimeRegister >= finalStartTime) {
+        throw new BadRequestException(
+          'Registration start time must be before event start time',
+        );
+      }
+    }
+
+    // Validate title if being updated
+    if (dto.title !== undefined) {
+      if (!dto.title.trim()) {
+        throw new BadRequestException(
+          'Event title cannot be empty or whitespace',
+        );
+      }
+      if (dto.title.length > 200) {
+        throw new BadRequestException(
+          'Event title must not exceed 200 characters',
+        );
+      }
+    }
+
+    // Validate maxCapacity if being updated
+    if (dto.maxCapacity !== undefined) {
+      if (dto.maxCapacity < 1) {
+        throw new BadRequestException(
+          'Maximum capacity must be at least 1',
+        );
+      }
+      if (dto.maxCapacity > 10000) {
+        throw new BadRequestException(
+          'Maximum capacity cannot exceed 10000',
+        );
+      }
+    }
+
+    // Validate venue time conflict if venue or time is being updated
     if (finalVenueId) {
       // Check for venue time conflict with other events (exclude current event)
       const conflictingEvent = await this.prisma.event.findFirst({
@@ -1015,6 +1135,67 @@ export class EventService {
     if (user.roleName !== 'staff') {
       throw new BadRequestException(
         `User with ID ${dto.userId} is not a staff member. Only staff can be assigned to events.`,
+      );
+    }
+
+    // Check if staff is already assigned to another event during the same time period
+    const conflictingAssignments = await this.prisma.eventStaff.findMany({
+      where: {
+        userId: dto.userId,
+        event: {
+          status: {
+            in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+          },
+          // Check if time ranges overlap
+          OR: [
+            // New event starts during existing event
+            {
+              AND: [
+                { startTime: { lte: event.startTime } },
+                { endTime: { gt: event.startTime } },
+              ],
+            },
+            // New event ends during existing event
+            {
+              AND: [
+                { startTime: { lt: event.endTime } },
+                { endTime: { gte: event.endTime } },
+              ],
+            },
+            // New event completely contains existing event
+            {
+              AND: [
+                { startTime: { gte: event.startTime } },
+                { endTime: { lte: event.endTime } },
+              ],
+            },
+            // Existing event completely contains new event
+            {
+              AND: [
+                { startTime: { lte: event.startTime } },
+                { endTime: { gte: event.endTime } },
+              ],
+            },
+          ],
+        },
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (conflictingAssignments.length > 0) {
+      const conflictingEvent = conflictingAssignments[0].event;
+      throw new BadRequestException(
+        `Staff đã được phân công cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Không thể phân công cùng lúc cho nhiều sự kiện trong cùng khoảng thời gian.`,
       );
     }
 
