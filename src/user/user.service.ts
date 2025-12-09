@@ -168,6 +168,7 @@ export class UserService {
           gender: true,
           address: true,
           roleName: true,
+          status: true,
           isActive: true,
           createdAt: true,
           campus: {
