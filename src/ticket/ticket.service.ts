@@ -135,6 +135,11 @@ export class TicketService {
       throw new BadRequestException('Seat is not active');
     }
 
+    // Check if seat already booked
+    if (seat.isBooked) {
+      throw new BadRequestException('Seat is already booked');
+    }
+
     // Check if seat is already booked for this event
     const existingSeatBooking = await this.prisma.ticket.findFirst({
       where: {
@@ -229,10 +234,19 @@ export class TicketService {
                 rowLabel: true,
                 colLabel: true,
                 seatType: true,
+                isBooked: true,
               },
             },
           },
         });
+
+        // Mark seat as booked for the duration of the event
+        if (dto.seatId) {
+          await tx.seat.update({
+            where: { id: dto.seatId },
+            data: { isBooked: true },
+          });
+        }
 
         // Increment registeredCount of the event
         await tx.event.update({
@@ -579,6 +593,12 @@ export class TicketService {
     // Check if ticket exists
     const existingTicket = await this.prisma.ticket.findUnique({
       where: { id },
+      select: {
+        id: true,
+        status: true,
+        seatId: true,
+        checkinTime: true,
+      },
     });
 
     if (!existingTicket) {
@@ -593,6 +613,17 @@ export class TicketService {
         // If status is changed to USED, set checkinTime
         if (dto.status === 'USED' && !existingTicket.checkinTime) {
           updateData.checkinTime = new Date();
+        }
+        // If status is changed to CANCELLED, free the seat
+        if (
+          dto.status === 'CANCELLED' &&
+          existingTicket.seatId &&
+          existingTicket.status !== 'CANCELLED'
+        ) {
+          await this.prisma.seat.update({
+            where: { id: existingTicket.seatId },
+            data: { isBooked: false },
+          });
         }
       }
 
@@ -664,6 +695,14 @@ export class TicketService {
             },
           },
         });
+
+        // Free the seat if any
+        if (ticket.seatId) {
+          await tx.seat.update({
+            where: { id: ticket.seatId },
+            data: { isBooked: false },
+          });
+        }
 
         return {
           message: `Ticket with ID ${id} has been deleted successfully`,

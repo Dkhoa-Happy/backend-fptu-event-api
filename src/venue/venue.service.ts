@@ -45,6 +45,7 @@ export class VenueService {
               colLabel: true,
               seatType: true,
               isActive: true,
+              isBooked: true,
             },
           },
         },
@@ -112,6 +113,7 @@ export class VenueService {
           colLabel: number;
           seatType: string;
           isActive: boolean;
+          isBooked: boolean;
           venueId: number;
         }>;
 
@@ -122,6 +124,7 @@ export class VenueService {
               colLabel: c,
               seatType: 'standard',
               isActive: true,
+              isBooked: false,
               venueId: response.id,
             });
           }
