@@ -205,7 +205,11 @@ export class SpeakerService {
     // Check if event exists
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      include: {
+      select: {
+        id: true,
+        title: true,
+        startTime: true,
+        endTime: true,
         organizer: {
           select: {
             id: true,
@@ -251,6 +255,61 @@ export class SpeakerService {
     if (existingAssignment) {
       throw new BadRequestException(
         'This speaker is already assigned to this event',
+      );
+    }
+
+    // Check schedule conflict for this speaker with other events
+    const conflictingAssignment = await this.prisma.eventSpeaker.findFirst({
+      where: {
+        speakerId: dto.speakerId,
+        eventId: { not: eventId },
+        event: {
+          status: {
+            in: ['PUBLISHED', 'PENDING'],
+          },
+          OR: [
+            {
+              AND: [
+                { startTime: { lte: event.startTime } },
+                { endTime: { gt: event.startTime } },
+              ],
+            },
+            {
+              AND: [
+                { startTime: { lt: event.endTime } },
+                { endTime: { gte: event.endTime } },
+              ],
+            },
+            {
+              AND: [
+                { startTime: { gte: event.startTime } },
+                { endTime: { lte: event.endTime } },
+              ],
+            },
+            {
+              AND: [
+                { startTime: { lte: event.startTime } },
+                { endTime: { gte: event.endTime } },
+              ],
+            },
+          ],
+        },
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            endTime: true,
+          },
+        },
+      },
+    });
+
+    if (conflictingAssignment) {
+      throw new BadRequestException(
+        `Speaker is already assigned to event "${conflictingAssignment.event.title}" từ ${new Date(conflictingAssignment.event.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingAssignment.event.endTime).toLocaleString('vi-VN')}. Không thể phân công trùng lịch.`,
       );
     }
 
