@@ -816,6 +816,12 @@ export class EventService {
     try {
       const event = await this.prisma.event.findUnique({
         where: { id },
+        select: {
+          id: true,
+          status: true,
+          venueId: true,
+          title: true,
+        },
       });
 
       if (!event) {
@@ -879,6 +885,14 @@ export class EventService {
           },
         },
       });
+
+      // If event is canceled, free all seats of the venue
+      if (dto.status === EventStatus.CANCELED && event.venueId) {
+        await this.prisma.seat.updateMany({
+          where: { venueId: event.venueId },
+          data: { isBooked: false },
+        });
+      }
 
       return {
         ...updatedEvent,

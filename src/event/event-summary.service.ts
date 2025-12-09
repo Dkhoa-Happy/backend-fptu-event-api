@@ -51,7 +51,7 @@ export class EventSummaryService {
     // Kiểm tra event tồn tại và đã kết thúc
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true, endTime: true, status: true },
+      select: { id: true, endTime: true, status: true, venueId: true },
     });
 
     if (!event) {
@@ -93,7 +93,14 @@ export class EventSummaryService {
       },
     });
 
+    // Reset seats to active after event ends
+    if (event.venueId) {
+      await this.prisma.seat.updateMany({
+        where: { venueId: event.venueId },
+        data: { isBooked: false },
+      });
+    }
+
     return summary;
   }
 }
-
