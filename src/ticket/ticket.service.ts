@@ -49,6 +49,7 @@ export class TicketService {
         maxCapacity: true,
         registeredCount: true,
         isGlobal: true,
+        venueId: true,
         venue: {
           select: {
             id: true,
@@ -125,6 +126,11 @@ export class TicketService {
     // Check if seat exists and is active
     const seat = await this.prisma.seat.findUnique({
       where: { id: dto.seatId },
+      select: {
+        id: true,
+        venueId: true,
+        isActive: true,
+      },
     });
 
     if (!seat) {
@@ -133,6 +139,19 @@ export class TicketService {
 
     if (!seat.isActive) {
       throw new BadRequestException('Seat is not active');
+    }
+
+    // Validate that seat belongs to the event's venue
+    if (!event.venueId) {
+      throw new BadRequestException(
+        'Sự kiện này không có venue (có thể là sự kiện online). Không thể chọn ghế.',
+      );
+    }
+
+    if (seat.venueId !== event.venueId) {
+      throw new BadRequestException(
+        `Ghế này không thuộc venue của sự kiện. Ghế thuộc venue ID ${seat.venueId}, nhưng sự kiện tổ chức tại venue ID ${event.venueId}.`,
+      );
     }
 
     // Check if seat is already booked for this event (check via Ticket, not isBooked)

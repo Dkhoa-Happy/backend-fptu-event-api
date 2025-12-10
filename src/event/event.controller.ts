@@ -135,7 +135,7 @@ export class EventController {
     summary:
       'Thống kê số lượng sự kiện theo tháng - Required roles: admin, staff, event_organizer',
     description:
-      'Trả về số lượng sự kiện được tạo trong từng tháng của năm (mặc định là năm hiện tại). Dữ liệu phù hợp để hiển thị chart.',
+      'Trả về số lượng sự kiện được tổ chức trong từng tháng của năm (tính theo ngày tổ chức sự kiện - startTime, mặc định là năm hiện tại). Dữ liệu phù hợp để hiển thị chart.',
   })
   @ApiResponse({
     status: 200,

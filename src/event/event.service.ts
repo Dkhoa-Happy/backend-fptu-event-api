@@ -1486,16 +1486,16 @@ export class EventService {
     }));
 
     // Lấy tất cả events trong năm, group by tháng
-    // Sử dụng Prisma raw query để group by tháng từ createdAt
+    // Sử dụng Prisma raw query để group by tháng từ startTime (ngày tổ chức sự kiện)
     const events = await this.prisma.$queryRaw<
       Array<{ month: number; count: bigint }>
     >`
       SELECT 
-        EXTRACT(MONTH FROM created_at)::int as month,
+        EXTRACT(MONTH FROM start_time)::int as month,
         COUNT(*)::bigint as count
       FROM events
-      WHERE EXTRACT(YEAR FROM created_at) = ${year}
-      GROUP BY EXTRACT(MONTH FROM created_at)
+      WHERE EXTRACT(YEAR FROM start_time) = ${year}
+      GROUP BY EXTRACT(MONTH FROM start_time)
       ORDER BY month ASC
     `;
 
