@@ -1,17 +1,37 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsBoolean,
   IsDateString,
   IsInt,
   IsOptional,
   IsString,
-  Min,
   Max,
-  MinLength,
   MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
 } from 'class-validator';
 import { IsFutureDate } from './validators/is-future-date.validator';
+
+export class CreateEventSpeakerDto {
+  @ApiProperty({ example: 1, description: 'ID của speaker' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  speakerId: number;
+
+  @ApiPropertyOptional({
+    example: 'Chủ đề chính của speaker',
+    description: 'Topic cho speaker này trong sự kiện',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  topic?: string;
+}
 
 export class CreateEventDto {
   @ApiProperty({ example: 'Tech Conference 2025' })
@@ -102,4 +122,36 @@ export class CreateEventDto {
   @Type(() => Number)
   @IsInt()
   venueId?: number;
+
+  @ApiPropertyOptional({
+    example: 5,
+    description: 'User ID làm host cho sự kiện (mặc định là người tạo)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  hostId?: number;
+
+  @ApiPropertyOptional({
+    type: [Number],
+    description: 'Danh sách staffId được gán cho sự kiện ngay khi tạo',
+    example: [2, 3, 4],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty({ message: 'staffIds không được rỗng nếu truyền vào' })
+  @Type(() => Number)
+  @IsInt({ each: true })
+  staffIds?: number[];
+
+  @ApiPropertyOptional({
+    type: [CreateEventSpeakerDto],
+    description: 'Danh sách speaker (speakerId + topic) gán cho sự kiện khi tạo',
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateEventSpeakerDto)
+  speakers?: CreateEventSpeakerDto[];
 }

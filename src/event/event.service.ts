@@ -63,6 +63,29 @@ export class EventService {
       }
     }
 
+    // Validate host (optional, default = người tạo)
+    const hostId = dto.hostId ?? currentUser?.id;
+    if (!hostId) {
+      throw new BadRequestException('Host is required');
+    }
+
+    const hostUser = await this.prisma.user.findUnique({
+      where: { id: hostId },
+      select: { id: true, roleName: true, isActive: true },
+    });
+
+    if (!hostUser) {
+      throw new NotFoundException(`Host user with ID ${hostId} not found`);
+    }
+
+    if (!hostUser.isActive) {
+      throw new BadRequestException('Host user is not active');
+    }
+
+    if (hostUser.roleName === 'student') {
+      throw new BadRequestException('Host must not be a student account');
+    }
+
     // Validate venue exists if provided
     if (dto.venueId) {
       const venue = await this.prisma.venue.findUnique({
@@ -83,7 +106,10 @@ export class EventService {
 
       // Check if organizer and venue are in the same campus
       // Nếu organizer có campusId, thì venue phải cùng campus
-      if (organizer.campusId !== null && organizer.campusId !== venue.campusId) {
+      if (
+        organizer.campusId !== null &&
+        organizer.campusId !== venue.campusId
+      ) {
         throw new BadRequestException(
           `Organizer và venue phải cùng campus. Organizer thuộc campus ID ${organizer.campusId}, nhưng venue thuộc campus ID ${venue.campusId}.`,
         );
@@ -192,54 +218,164 @@ export class EventService {
       );
     }
 
+    // Deduplicate staffIds and speakers
+    const staffIds =
+      dto.staffIds && dto.staffIds.length > 0
+        ? Array.from(new Set(dto.staffIds))
+        : [];
+    const speakers =
+      dto.speakers && dto.speakers.length > 0
+        ? dto.speakers.map((s) => ({
+            speakerId: Number(s.speakerId),
+            topic: s.topic,
+          }))
+        : [];
+
+    // Validate staff if provided
+    if (staffIds.length > 0) {
+      const staffUsers = await this.prisma.user.findMany({
+        where: { id: { in: staffIds } },
+        select: { id: true, roleName: true, isActive: true },
+      });
+
+      if (staffUsers.length !== staffIds.length) {
+        const foundIds = new Set(staffUsers.map((u) => u.id));
+        const missing = staffIds.filter((id) => !foundIds.has(id));
+        throw new NotFoundException(
+          `Không tìm thấy staff với id: ${missing.join(', ')}`,
+        );
+      }
+
+      const invalidStaff = staffUsers.find(
+        (u) => u.roleName !== 'staff' || !u.isActive,
+      );
+      if (invalidStaff) {
+        throw new BadRequestException(
+          'Tất cả staff gán cho sự kiện phải là tài khoản staff đang hoạt động',
+        );
+      }
+    }
+
+    // Validate speakers if provided
+    if (speakers.length > 0) {
+      const speakerIds = Array.from(new Set(speakers.map((s) => s.speakerId)));
+      const speakerRecords = await this.prisma.speaker.findMany({
+        where: { id: { in: speakerIds } },
+        select: { id: true },
+      });
+      if (speakerRecords.length !== speakerIds.length) {
+        const found = new Set(speakerRecords.map((s) => s.id));
+        const missing = speakerIds.filter((id) => !found.has(id));
+        throw new NotFoundException(
+          `Không tìm thấy speaker với id: ${missing.join(', ')}`,
+        );
+      }
+    }
+
     try {
-      const event = await this.prisma.event.create({
-        data: {
-          title: dto.title,
-          description: dto.description,
-          category: dto.category,
-          bannerUrl: dto.bannerUrl,
-          startTime: new Date(dto.startTime),
-          endTime: new Date(dto.endTime),
-          startTimeRegister: new Date(dto.startTimeRegister),
-          endTimeRegister: new Date(dto.endTimeRegister),
-          status: 'PENDING',
-          maxCapacity: dto.maxCapacity,
-          isGlobal: dto.isGlobal ?? false,
-          organizerId: dto.organizerId,
-          venueId: dto.venueId,
-          // Note: hostId is required in schema but not in DTO - you may want to add it
-          // For now, using organizerId as a placeholder - adjust as needed
-          hostId: dto.organizerId, // You may want to add hostId to DTO
-        },
-        include: {
-          organizer: {
-            select: {
-              id: true,
-              name: true,
-              description: true,
-              contactEmail: true,
-              logoUrl: true,
+      const event = await this.prisma.$transaction(async (tx) => {
+        const createdEvent = await tx.event.create({
+          data: {
+            title: dto.title,
+            description: dto.description,
+            category: dto.category,
+            bannerUrl: dto.bannerUrl,
+            startTime: new Date(dto.startTime),
+            endTime: new Date(dto.endTime),
+            startTimeRegister: new Date(dto.startTimeRegister),
+            endTimeRegister: new Date(dto.endTimeRegister),
+            status: 'PENDING',
+            maxCapacity: dto.maxCapacity,
+            isGlobal: dto.isGlobal ?? false,
+            organizerId: dto.organizerId,
+            venueId: dto.venueId,
+            hostId,
+          },
+        });
+
+        if (staffIds.length > 0) {
+          await tx.eventStaff.createMany({
+            data: staffIds.map((userId) => ({
+              eventId: createdEvent.id,
+              userId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        if (speakers.length > 0) {
+          await tx.eventSpeaker.createMany({
+            data: speakers.map((s) => ({
+              eventId: createdEvent.id,
+              speakerId: s.speakerId,
+              topic: s.topic,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        const fullEvent = await tx.event.findUnique({
+          where: { id: createdEvent.id },
+          include: {
+            organizer: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                contactEmail: true,
+                logoUrl: true,
+              },
+            },
+            venue: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
+                hasSeats: true,
+              },
+            },
+            host: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+            eventSpeakers: {
+              include: {
+                speaker: {
+                  select: {
+                    id: true,
+                    name: true,
+                    bio: true,
+                    avatar: true,
+                    type: true,
+                    company: true,
+                  },
+                },
+              },
+            },
+            eventStaffs: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    userName: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                    avatar: true,
+                    roleName: true,
+                  },
+                },
+              },
             },
           },
-          venue: {
-            select: {
-              id: true,
-              name: true,
-              location: true,
-              hasSeats: true,
-            },
-          },
-          host: {
-            select: {
-              id: true,
-              userName: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
+        });
+
+        return fullEvent;
       });
 
       return event;
@@ -363,6 +499,15 @@ export class EventService {
               name: true,
               location: true,
               hasSeats: true,
+              campusId: true,
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                  address: true,
+                },
+              },
             },
           },
           host: {
@@ -452,6 +597,14 @@ export class EventService {
             location: true,
             hasSeats: true,
             campusId: true,
+            campus: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                address: true,
+              },
+            },
           },
         },
         host: {
@@ -636,10 +789,7 @@ export class EventService {
         select: { campusId: true },
       });
 
-      if (
-        existingVenue &&
-        finalOrganizerCampusId !== existingVenue.campusId
-      ) {
+      if (existingVenue && finalOrganizerCampusId !== existingVenue.campusId) {
         throw new BadRequestException(
           `Organizer và venue phải cùng campus. Organizer thuộc campus ID ${finalOrganizerCampusId}, nhưng venue thuộc campus ID ${existingVenue.campusId}.`,
         );
@@ -903,6 +1053,15 @@ export class EventService {
               name: true,
               location: true,
               hasSeats: true,
+              campusId: true,
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                  address: true,
+                },
+              },
             },
           },
           host: {
@@ -1064,6 +1223,15 @@ export class EventService {
               name: true,
               location: true,
               hasSeats: true,
+              campusId: true,
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                  address: true,
+                },
+              },
             },
           },
           host: {
@@ -1374,6 +1542,15 @@ export class EventService {
               name: true,
               location: true,
               hasSeats: true,
+              campusId: true,
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                  address: true,
+                },
+              },
             },
           },
           host: {
