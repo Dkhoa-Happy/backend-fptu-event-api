@@ -3,3 +3,4 @@ export * from './campus.seeder';
 export * from './user.seeder';
 export * from './event.seeder';
 export * from './seat.seeder';
+export * from './ticket.seeder';

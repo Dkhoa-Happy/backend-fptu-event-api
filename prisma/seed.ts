@@ -7,6 +7,7 @@ import {
   UserSeeder,
   EventSeeder,
   SeatSeeder,
+  TicketSeeder,
 } from '../src/seeder';
 
 const pool = new Pool({
@@ -23,6 +24,7 @@ async function main() {
     new UserSeeder(),
     new EventSeeder(),
     new SeatSeeder(),
+    new TicketSeeder(),
   ];
 
   for (const seeder of seeders) {
