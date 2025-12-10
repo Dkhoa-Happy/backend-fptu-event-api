@@ -56,8 +56,9 @@ export class EmailService {
     email: string;
     fullName: string;
     status: UserStatus;
+    reason?: string;
   }) {
-    const { email, fullName, status } = params;
+    const { email, fullName, status, reason } = params;
     const isApproved = status === UserStatus.APPROVED;
     const subject = isApproved
       ? 'Your account has been approved'
@@ -69,7 +70,8 @@ export class EmailService {
       ${
         isApproved
           ? '<p>You can now sign in and start using the system.</p>'
-          : '<p>If you believe this is a mistake, please contact support.</p>'
+          : `<p>Lý do từ chối: <strong>${reason || 'Không được cung cấp'}</strong></p>
+             <p>Nếu cần hỗ trợ, vui lòng liên hệ bộ phận hỗ trợ.</p>`
       }
       <p>Regards,<br/>FPT Event Team</p>
     `;

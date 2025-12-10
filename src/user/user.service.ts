@@ -401,6 +401,13 @@ export class UserService {
         );
       }
 
+      const reason = dto.reason?.trim();
+      if (dto.status === UserStatus.REJECTED && !reason) {
+        throw new ConflictException(
+          'Reason is required when rejecting a user account',
+        );
+      }
+
       const updatedUser = await this.prisma.user.update({
         where: { id },
         data: {
@@ -416,6 +423,7 @@ export class UserService {
         email: user.email,
         fullName: fullName || user.userName || 'user',
         status: dto.status,
+        reason,
       });
 
       return {
@@ -423,6 +431,7 @@ export class UserService {
           dto.status === UserStatus.APPROVED
             ? 'User approved successfully'
             : 'User rejected successfully',
+        ...(reason ? { reason } : {}),
         user: this.excludePassword(updatedUser),
       };
     } catch (error: unknown) {
