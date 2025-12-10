@@ -135,21 +135,19 @@ export class TicketService {
       throw new BadRequestException('Seat is not active');
     }
 
-    // Check if seat already booked
-    if (seat.isBooked) {
-      throw new BadRequestException('Seat is already booked');
-    }
-
-    // Check if seat is already booked for this event
+    // Check if seat is already booked for this event (check via Ticket, not isBooked)
     const existingSeatBooking = await this.prisma.ticket.findFirst({
       where: {
         eventId: dto.eventId,
         seatId: dto.seatId,
+        status: {
+          notIn: ['CANCELLED', 'EXPIRED'], // Chỉ check các ticket còn hiệu lực
+        },
       },
     });
 
     if (existingSeatBooking) {
-      throw new BadRequestException('Seat is already booked for this event');
+      throw new BadRequestException('Ghế này đã được đặt cho sự kiện này');
     }
 
     // Generate unique QR code using UUID v4
@@ -240,13 +238,8 @@ export class TicketService {
           },
         });
 
-        // Mark seat as booked for the duration of the event
-        if (dto.seatId) {
-          await tx.seat.update({
-            where: { id: dto.seatId },
-            data: { isBooked: true },
-          });
-        }
+        // Note: Không cần set isBooked vì availability được check qua Ticket với eventId
+        // Mỗi event có thể book cùng một seat ở các thời điểm khác nhau
 
         // Increment registeredCount of the event
         await tx.event.update({
@@ -614,17 +607,7 @@ export class TicketService {
         if (dto.status === 'USED' && !existingTicket.checkinTime) {
           updateData.checkinTime = new Date();
         }
-        // If status is changed to CANCELLED, free the seat
-        if (
-          dto.status === 'CANCELLED' &&
-          existingTicket.seatId &&
-          existingTicket.status !== 'CANCELLED'
-        ) {
-          await this.prisma.seat.update({
-            where: { id: existingTicket.seatId },
-            data: { isBooked: false },
-          });
-        }
+        // Note: Không cần set isBooked = false vì availability được check qua Ticket với eventId
       }
 
       const ticket = await this.prisma.ticket.update({
@@ -696,13 +679,7 @@ export class TicketService {
           },
         });
 
-        // Free the seat if any
-        if (ticket.seatId) {
-          await tx.seat.update({
-            where: { id: ticket.seatId },
-            data: { isBooked: false },
-          });
-        }
+        // Note: Không cần set isBooked = false vì availability được check qua Ticket với eventId
 
         return {
           message: `Ticket with ID ${id} has been deleted successfully`,

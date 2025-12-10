@@ -933,13 +933,7 @@ export class EventService {
         },
       });
 
-      // If event is canceled, free all seats of the venue
-      if (dto.status === EventStatus.CANCELED && event.venueId) {
-        await this.prisma.seat.updateMany({
-          where: { venueId: event.venueId },
-          data: { isBooked: false },
-        });
-      }
+      // Note: Không cần reset isBooked khi cancel event vì availability được tính động qua Ticket với eventId
 
       return {
         ...updatedEvent,
