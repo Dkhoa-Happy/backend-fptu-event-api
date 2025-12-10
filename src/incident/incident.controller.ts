@@ -5,11 +5,17 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IncidentService } from './incident.service';
-import { CreateIncidentDto, UpdateIncidentStatusDto } from './dto';
+import {
+  CreateIncidentDto,
+  UpdateIncidentStatusDto,
+  FilterIncidentsDto,
+  UpdateIncidentDto,
+} from './dto';
 import { JwtGuard, RolesGuard } from '../auth/guard';
 import { GetUser, Roles } from '../auth/decorator';
 import { UserRole } from '@prisma/client';
@@ -43,6 +49,19 @@ export class IncidentController {
     return this.incidentService.getMyIncidents(userId);
   }
 
+  @Get()
+  @Roles(UserRole.event_organizer, UserRole.admin)
+  @ApiOperation({
+    summary:
+      'Xem tất cả sự cố với bộ lọc - Admin xem tất cả, Event Organizer chỉ xem sự cố của sự kiện mình sở hữu',
+  })
+  getAllIncidents(
+    @Query() filters: FilterIncidentsDto,
+    @GetUser() user: any,
+  ) {
+    return this.incidentService.getAllIncidents(filters, user);
+  }
+
   @Get('event/:eventId')
   @Roles(UserRole.staff, UserRole.event_organizer, UserRole.admin)
   @ApiOperation({
@@ -69,5 +88,19 @@ export class IncidentController {
       dto,
       user,
     );
+  }
+
+  @Patch(':id')
+  @Roles(UserRole.event_organizer, UserRole.admin)
+  @ApiOperation({
+    summary:
+      'Chỉnh sửa thông tin sự cố (title, description, severity, status) - Chỉ Admin và Event Organizer (chủ sở hữu sự kiện)',
+  })
+  updateIncident(
+    @Param('id') id: string,
+    @Body() dto: UpdateIncidentDto,
+    @GetUser() user: any,
+  ) {
+    return this.incidentService.updateIncident(parseInt(id, 10), dto, user);
   }
 }

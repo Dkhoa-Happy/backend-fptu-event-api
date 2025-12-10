@@ -11,7 +11,12 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateIncidentDto, UpdateIncidentStatusDto } from './dto';
+import {
+  CreateIncidentDto,
+  UpdateIncidentStatusDto,
+  FilterIncidentsDto,
+  UpdateIncidentDto,
+} from './dto';
 
 @Injectable()
 export class IncidentService {
@@ -132,6 +137,56 @@ export class IncidentService {
     });
   }
 
+  async getAllIncidents(
+    filters: FilterIncidentsDto,
+    user: { id?: number; roleName?: string },
+  ) {
+    const isAdmin = user.roleName === 'admin';
+    const isEventOrganizer = user.roleName === 'event_organizer';
+
+    // Build where clause
+    const where: Prisma.IncidentWhereInput = {};
+
+    // Apply filters
+    if (filters.status) {
+      where.status = filters.status;
+    }
+    if (filters.severity) {
+      where.severity = filters.severity;
+    }
+    if (filters.eventId) {
+      where.eventId = filters.eventId;
+    }
+    if (filters.reporterId) {
+      where.reporterId = filters.reporterId;
+    }
+
+    // Event organizer can only see incidents from their own events
+    if (isEventOrganizer && !isAdmin) {
+      const organizerEvents = await this.prisma.event.findMany({
+        where: {
+          organizer: {
+            ownerId: user.id,
+          },
+        },
+        select: { id: true },
+      });
+
+      const eventIds = organizerEvents.map((e) => e.id);
+      where.eventId = {
+        in: eventIds,
+      };
+    }
+
+    const incidents = await this.prisma.incident.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: this.defaultInclude(),
+    });
+
+    return incidents;
+  }
+
   async updateIncidentStatus(
     id: number,
     dto: UpdateIncidentStatusDto,
@@ -179,6 +234,68 @@ export class IncidentService {
 
     return {
       message: 'Đã cập nhật trạng thái sự cố',
+      incident: updated,
+    };
+  }
+
+  async updateIncident(
+    id: number,
+    dto: UpdateIncidentDto,
+    user: { id?: number; roleName?: string },
+  ) {
+    const incident = await this.prisma.incident.findUnique({
+      where: { id },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            organizer: { select: { ownerId: true } },
+          },
+        },
+        reporter: true,
+      },
+    });
+
+    if (!incident) {
+      throw new NotFoundException('Sự cố không tồn tại');
+    }
+
+    const isAdmin = user.roleName === 'admin';
+    const isOrganizerOwner =
+      user.roleName === 'event_organizer' &&
+      !!incident.event.organizer?.ownerId &&
+      incident.event.organizer.ownerId === user.id;
+
+    if (!isAdmin && !isOrganizerOwner) {
+      throw new ForbiddenException(
+        'Bạn không có quyền chỉnh sửa sự cố này. Chỉ Admin và Event Organizer (chủ sở hữu sự kiện) mới có quyền.',
+      );
+    }
+
+    // Build update data
+    const updateData: Prisma.IncidentUpdateInput = {};
+    if (dto.title !== undefined) {
+      updateData.title = dto.title;
+    }
+    if (dto.description !== undefined) {
+      updateData.description = dto.description;
+    }
+    if (dto.severity !== undefined) {
+      updateData.severity = dto.severity;
+    }
+    if (dto.status !== undefined) {
+      updateData.status = dto.status;
+    }
+
+    const updated = await this.prisma.incident.update({
+      where: { id },
+      data: updateData,
+      include: this.defaultInclude(),
+    });
+
+    return {
+      message: 'Đã cập nhật thông tin sự cố',
       incident: updated,
     };
   }
