@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { EventStatus } from '@prisma/client';
+import { EventStatus, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventSummaryService } from './event-summary.service';
 import {
@@ -378,7 +378,10 @@ export class EventService {
         return fullEvent;
       });
 
-      return event;
+      return {
+        ...event,
+        checkinCount: 0, // mới tạo nên chưa có check-in
+      };
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -560,8 +563,15 @@ export class EventService {
       this.prisma.event.count({ where }),
     ]);
 
+    const checkinMap = await this.getCheckinCountByEventIds(
+      items.map((e) => e.id),
+    );
+
     return {
-      data: items,
+      data: items.map((e) => ({
+        ...e,
+        checkinCount: checkinMap[e.id] ?? 0,
+      })),
       meta: {
         total,
         page,
@@ -659,6 +669,9 @@ export class EventService {
       throw new NotFoundException(`Event with ID ${id} not found`);
     }
 
+    const checkinCountMap = await this.getCheckinCountByEventIds([event.id]);
+    const checkinCount = checkinCountMap[event.id] ?? 0;
+
     // Nếu là student: kiểm tra quyền xem event
     if (currentUser?.roleName === 'student' && currentUser.campusId) {
       const isSameCampus =
@@ -681,7 +694,10 @@ export class EventService {
       }
     }
 
-    return event;
+    return {
+      ...event,
+      checkinCount,
+    };
   }
 
   async update(
@@ -1279,8 +1295,15 @@ export class EventService {
       this.prisma.event.count({ where }),
     ]);
 
+    const checkinMap = await this.getCheckinCountByEventIds(
+      items.map((e) => e.id),
+    );
+
     return {
-      data: items,
+      data: items.map((e) => ({
+        ...e,
+        checkinCount: checkinMap[e.id] ?? 0,
+      })),
       meta: {
         total,
         page,
@@ -1598,8 +1621,15 @@ export class EventService {
       this.prisma.event.count({ where }),
     ]);
 
+    const checkinMap = await this.getCheckinCountByEventIds(
+      items.map((e) => e.id),
+    );
+
     return {
-      data: items,
+      data: items.map((e) => ({
+        ...e,
+        checkinCount: checkinMap[e.id] ?? 0,
+      })),
       meta: {
         total,
         page,
@@ -1689,5 +1719,27 @@ export class EventService {
       data: monthlyStats,
       total: monthlyStats.reduce((sum, item) => sum + item.count, 0),
     };
+  }
+
+  private async getCheckinCountByEventIds(
+    eventIds: string[],
+  ): Promise<Record<string, number>> {
+    if (!eventIds || eventIds.length === 0) {
+      return {};
+    }
+
+    const counts = await this.prisma.ticket.groupBy({
+      by: ['eventId'],
+      where: {
+        eventId: { in: eventIds },
+        status: TicketStatus.USED,
+      },
+      _count: { _all: true },
+    });
+
+    return counts.reduce<Record<string, number>>((acc, item) => {
+      acc[item.eventId] = item._count._all;
+      return acc;
+    }, {});
   }
 }
