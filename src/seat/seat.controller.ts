@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { SeatService } from './seat.service';
 import { UpdateSeatTypeDto, ToggleSeatStatusDto } from './dto';
 import { Public } from '../auth/decorator';
@@ -17,8 +17,19 @@ export class SeatController {
   @Get('venue/:venueId')
   @Public()
   @ApiOperation({ summary: 'Lấy danh sách ghế theo venue ID' })
-  getSeatsByVenueId(@Param('venueId') venueId: string) {
-    return this.seatService.getSeatsByVenueId(parseInt(venueId));
+  @ApiQuery({
+    name: 'eventId',
+    required: false,
+    description: 'Event ID để check availability (nếu có sẽ tính isBooked theo event đó)',
+  })
+  getSeatsByVenueId(
+    @Param('venueId') venueId: string,
+    @Query('eventId') eventId?: string,
+  ) {
+    return this.seatService.getSeatsByVenueId(
+      parseInt(venueId),
+      eventId ? eventId : undefined,
+    );
   }
 
   @Get(':id')

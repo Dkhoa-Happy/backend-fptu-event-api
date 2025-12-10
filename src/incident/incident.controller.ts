@@ -54,7 +54,7 @@ export class IncidentController {
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.staff, UserRole.event_organizer, UserRole.admin)
+  @Roles(UserRole.event_organizer, UserRole.admin)
   @ApiOperation({
     summary:
       'Cập nhật trạng thái sự cố - Admin, Organizer owner hoặc chính Staff reporter',

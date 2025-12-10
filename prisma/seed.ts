@@ -5,6 +5,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import {
   CampusSeeder,
   UserSeeder,
+  VenueSeeder,
   EventSeeder,
   SeatSeeder,
   TicketSeeder,
@@ -22,6 +23,7 @@ async function main() {
   const seeders = [
     new CampusSeeder(),
     new UserSeeder(),
+    new VenueSeeder(),
     new EventSeeder(),
     new SeatSeeder(),
     new TicketSeeder(),

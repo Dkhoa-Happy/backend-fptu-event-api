@@ -46,19 +46,19 @@ export class EventSeeder implements Seeder {
       },
     });
 
-    const venue = await prisma.venue.upsert({
-      where: { id: 1 },
-      update: {},
-      create: {
-        name: 'FU HCM Hall A',
-        location: 'FPT University Hồ Chí Minh',
-        row: 10,
-        column: 10,
-        hasSeats: true,
+    // Lấy venue đầu tiên của campus (venue seeder đã tạo sẵn)
+    const venue = await prisma.venue.findFirst({
+      where: {
         campusId: campus.id,
         status: 'ACTIVE',
       },
+      orderBy: { id: 'asc' },
     });
+
+    if (!venue) {
+      console.warn('No venue found for campus, skip EventSeeder');
+      return;
+    }
 
     const now = new Date();
     const startRegister = new Date(now.getTime() - 24 * 60 * 60 * 1000); // yesterday

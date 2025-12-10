@@ -31,7 +31,7 @@ export class EventService {
     // Validate organizer exists and check permissions
     const organizer = await this.prisma.organizer.findUnique({
       where: { id: dto.organizerId },
-      select: { id: true, ownerId: true },
+      select: { id: true, ownerId: true, campusId: true },
     });
 
     if (!organizer) {
@@ -67,7 +67,7 @@ export class EventService {
     if (dto.venueId) {
       const venue = await this.prisma.venue.findUnique({
         where: { id: dto.venueId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, campusId: true },
       });
 
       if (!venue) {
@@ -78,6 +78,14 @@ export class EventService {
       if (venue.status.toUpperCase() !== 'ACTIVE') {
         throw new BadRequestException(
           `Venue with ID ${dto.venueId} is not active`,
+        );
+      }
+
+      // Check if organizer and venue are in the same campus
+      // Nếu organizer có campusId, thì venue phải cùng campus
+      if (organizer.campusId !== null && organizer.campusId !== venue.campusId) {
+        throw new BadRequestException(
+          `Organizer và venue phải cùng campus. Organizer thuộc campus ID ${organizer.campusId}, nhưng venue thuộc campus ID ${venue.campusId}.`,
         );
       }
 
@@ -557,11 +565,15 @@ export class EventService {
       }
     }
 
+    // Get final organizer (new if updated, existing otherwise)
+    const finalOrganizerId = dto.organizerId ?? existingEvent.organizerId;
+    let finalOrganizerCampusId: number | null = null;
+
     // Validate organizer if being updated
     if (dto.organizerId !== undefined) {
       const organizer = await this.prisma.organizer.findUnique({
         where: { id: dto.organizerId },
-        select: { id: true, ownerId: true },
+        select: { id: true, ownerId: true, campusId: true },
       });
 
       if (!organizer) {
@@ -569,6 +581,8 @@ export class EventService {
           `Organizer with ID ${dto.organizerId} not found`,
         );
       }
+
+      finalOrganizerCampusId = organizer.campusId;
 
       // If event_organizer, check permission for new organizer
       if (currentUser?.roleName === 'event_organizer' && currentUser.id) {
@@ -578,6 +592,13 @@ export class EventService {
           );
         }
       }
+    } else {
+      // Get existing organizer's campusId
+      const existingOrganizer = await this.prisma.organizer.findUnique({
+        where: { id: existingEvent.organizerId },
+        select: { campusId: true },
+      });
+      finalOrganizerCampusId = existingOrganizer?.campusId ?? null;
     }
 
     // Validate venue if being updated
@@ -585,7 +606,7 @@ export class EventService {
     if (dto.venueId !== undefined && dto.venueId !== null) {
       const venue = await this.prisma.venue.findUnique({
         where: { id: dto.venueId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, campusId: true },
       });
 
       if (!venue) {
@@ -595,6 +616,32 @@ export class EventService {
       if (venue.status.toUpperCase() !== 'ACTIVE') {
         throw new BadRequestException(
           `Venue with ID ${dto.venueId} is not active`,
+        );
+      }
+
+      // Check if organizer and venue are in the same campus
+      // Nếu organizer có campusId, thì venue phải cùng campus
+      if (
+        finalOrganizerCampusId !== null &&
+        finalOrganizerCampusId !== venue.campusId
+      ) {
+        throw new BadRequestException(
+          `Organizer và venue phải cùng campus. Organizer thuộc campus ID ${finalOrganizerCampusId}, nhưng venue thuộc campus ID ${venue.campusId}.`,
+        );
+      }
+    } else if (finalVenueId && finalOrganizerCampusId !== null) {
+      // If venue is not being updated but organizer is, check existing venue
+      const existingVenue = await this.prisma.venue.findUnique({
+        where: { id: finalVenueId },
+        select: { campusId: true },
+      });
+
+      if (
+        existingVenue &&
+        finalOrganizerCampusId !== existingVenue.campusId
+      ) {
+        throw new BadRequestException(
+          `Organizer và venue phải cùng campus. Organizer thuộc campus ID ${finalOrganizerCampusId}, nhưng venue thuộc campus ID ${existingVenue.campusId}.`,
         );
       }
     }
@@ -886,13 +933,7 @@ export class EventService {
         },
       });
 
-      // If event is canceled, free all seats of the venue
-      if (dto.status === EventStatus.CANCELED && event.venueId) {
-        await this.prisma.seat.updateMany({
-          where: { venueId: event.venueId },
-          data: { isBooked: false },
-        });
-      }
+      // Note: Không cần reset isBooked khi cancel event vì availability được tính động qua Ticket với eventId
 
       return {
         ...updatedEvent,
