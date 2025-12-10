@@ -11,6 +11,7 @@ import {
   MinLength,
   MaxLength,
 } from 'class-validator';
+import { IsFutureDate } from './validators/is-future-date.validator';
 
 export class CreateEventDto {
   @ApiProperty({ example: 'Tech Conference 2025' })
@@ -44,6 +45,7 @@ export class CreateEventDto {
     description: 'Event start time (ISO 8601 format)',
   })
   @IsDateString()
+  @IsFutureDate({ message: 'Thời gian bắt đầu sự kiện không được là ngày quá khứ' })
   startTime: string;
 
   @ApiProperty({
@@ -51,6 +53,7 @@ export class CreateEventDto {
     description: 'Event end time (ISO 8601 format)',
   })
   @IsDateString()
+  @IsFutureDate({ message: 'Thời gian kết thúc sự kiện không được là ngày quá khứ' })
   endTime: string;
 
   @ApiProperty({
@@ -58,6 +61,7 @@ export class CreateEventDto {
     description: 'Registration start time (ISO 8601 format)',
   })
   @IsDateString()
+  @IsFutureDate({ message: 'Thời gian bắt đầu đăng ký không được là ngày quá khứ' })
   startTimeRegister: string;
 
   @ApiProperty({
@@ -65,6 +69,7 @@ export class CreateEventDto {
     description: 'Registration end time (ISO 8601 format)',
   })
   @IsDateString()
+  @IsFutureDate({ message: 'Thời gian kết thúc đăng ký không được là ngày quá khứ' })
   endTimeRegister: string;
 
   @ApiProperty({ example: 100, description: 'Maximum capacity of the event' })

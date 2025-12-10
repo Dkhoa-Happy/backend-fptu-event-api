@@ -8,6 +8,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
+import { IsFutureDate } from './validators/is-future-date.validator';
 
 export class UpdateEventDto {
   @ApiPropertyOptional({ example: 'Tech Conference 2025 Updated' })
@@ -41,6 +42,7 @@ export class UpdateEventDto {
   })
   @IsOptional()
   @IsDateString()
+  @IsFutureDate({ message: 'Thời gian bắt đầu sự kiện không được là ngày quá khứ' })
   startTime?: string;
 
   @ApiPropertyOptional({
@@ -49,6 +51,7 @@ export class UpdateEventDto {
   })
   @IsOptional()
   @IsDateString()
+  @IsFutureDate({ message: 'Thời gian kết thúc sự kiện không được là ngày quá khứ' })
   endTime?: string;
 
   @ApiPropertyOptional({
@@ -57,6 +60,7 @@ export class UpdateEventDto {
   })
   @IsOptional()
   @IsDateString()
+  @IsFutureDate({ message: 'Thời gian bắt đầu đăng ký không được là ngày quá khứ' })
   startTimeRegister?: string;
 
   @ApiPropertyOptional({
@@ -65,6 +69,7 @@ export class UpdateEventDto {
   })
   @IsOptional()
   @IsDateString()
+  @IsFutureDate({ message: 'Thời gian kết thúc đăng ký không được là ngày quá khứ' })
   endTimeRegister?: string;
 
   @ApiPropertyOptional({
