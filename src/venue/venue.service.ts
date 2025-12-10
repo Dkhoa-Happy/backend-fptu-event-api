@@ -7,8 +7,22 @@ export class VenueService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(status?: string) {
+    // Normalize status: convert "Active" -> "ACTIVE", "Inactive" -> "INACTIVE"
+    let normalizedStatus: string | undefined;
+    if (status) {
+      const lowerStatus = status.toLowerCase();
+      if (lowerStatus === 'active') {
+        normalizedStatus = 'ACTIVE';
+      } else if (lowerStatus === 'inactive') {
+        normalizedStatus = 'INACTIVE';
+      } else {
+        // If status doesn't match, use as-is (case-insensitive search)
+        normalizedStatus = status.toUpperCase();
+      }
+    }
+
     return this.prisma.venue.findMany({
-      where: status ? { status } : undefined,
+      where: normalizedStatus ? { status: normalizedStatus } : undefined,
       select: {
         id: true,
         name: true,
@@ -97,7 +111,7 @@ export class VenueService {
           hasSeats,
           mapImageUrl,
           campusId,
-          status: 'Active',
+          status: 'ACTIVE',
         },
       });
       // Nếu venue có seats (hasSeats true) và số hàng, cột hợp lệ thì tạo tất cả seats
@@ -189,7 +203,7 @@ export class VenueService {
       const response = await this.prisma.venue.update({
         where: { id },
         data: {
-          status: 'Inactive',
+          status: 'INACTIVE',
         },
       });
       return { message: 'Xóa venue thành công', venue: response };
