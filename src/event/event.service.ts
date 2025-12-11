@@ -8,6 +8,7 @@ import type { Prisma } from '@prisma/client';
 import { EventStatus, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventSummaryService } from './event-summary.service';
+import { NotificationService } from '../notification/notification.service';
 import {
   CreateEventDto,
   UpdateEventDto,
@@ -22,6 +23,7 @@ export class EventService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventSummaryService: EventSummaryService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(
@@ -513,6 +515,27 @@ export class EventService {
 
         return fullEvent;
       });
+
+      // Gửi thông báo cho organizer khi tạo event thành công
+      // Lấy ownerId từ organizer để gửi notification
+      if (organizer.ownerId && event) {
+        this.notificationService
+          .notifyEventStatusChange(
+            organizer.ownerId,
+            {
+              id: event.id,
+              title: event.title,
+              status: 'PENDING',
+            },
+            'PENDING',
+          )
+          .catch((error) => {
+            console.error(
+              `Failed to send notification to organizer ${organizer.ownerId}:`,
+              error,
+            );
+          });
+      }
 
       return {
         ...event,
@@ -1184,6 +1207,20 @@ export class EventService {
         );
       }
 
+      // Lấy organizer ownerId trước khi update để gửi notification
+      const eventWithOrganizer = await this.prisma.event.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          title: true,
+          organizer: {
+            select: {
+              ownerId: true,
+            },
+          },
+        },
+      });
+
       const updatedEvent = await this.prisma.event.update({
         where: { id },
         data: {
@@ -1245,6 +1282,26 @@ export class EventService {
       });
 
       // Note: Không cần reset isBooked khi cancel event vì availability được tính động qua Ticket với eventId
+
+      // Gửi thông báo cho organizer khi admin approve hoặc reject event
+      if (eventWithOrganizer && eventWithOrganizer.organizer.ownerId) {
+        this.notificationService
+          .notifyEventStatusChange(
+            eventWithOrganizer.organizer.ownerId,
+            {
+              id: updatedEvent.id,
+              title: updatedEvent.title,
+              status: dto.status,
+            },
+            dto.status,
+          )
+          .catch((error) => {
+            console.error(
+              `Failed to send notification to organizer ${eventWithOrganizer.organizer.ownerId}:`,
+              error,
+            );
+          });
+      }
 
       return {
         ...updatedEvent,
@@ -1594,10 +1651,33 @@ export class EventService {
               title: true,
               startTime: true,
               endTime: true,
+              organizer: {
+                select: {
+                  name: true,
+                },
+              },
             },
           },
         },
       });
+
+      // Gửi thông báo cho staff khi được assign vào event
+      // Gọi bất đồng bộ, không chờ kết quả để không làm chậm response
+      this.notificationService
+        .notifyStaffAssigned(dto.userId, {
+          id: eventStaff.event.id,
+          title: eventStaff.event.title,
+          startTime: eventStaff.event.startTime,
+          endTime: eventStaff.event.endTime,
+          organizer: eventStaff.event.organizer,
+        })
+        .catch((error) => {
+          // Log lỗi nhưng không throw để không ảnh hưởng đến response
+          console.error(
+            `Failed to send notification to staff ${dto.userId}:`,
+            error,
+          );
+        });
 
       return eventStaff;
     } catch (error: unknown) {

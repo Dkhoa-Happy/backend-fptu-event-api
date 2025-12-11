@@ -299,6 +299,28 @@ export class UserService {
     }
   }
 
+  async activateUser(id: number) {
+    try {
+      const user = await this.prisma.user.update({
+        where: { id },
+        data: { isActive: true },
+      });
+
+      return this.excludePassword(user);
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === 'P2025'
+      ) {
+        throw new NotFoundException('User not found');
+      }
+
+      throw error;
+    }
+  }
+
   async updateMe(userId: number, dto: UpdateProfileDto) {
     const user = await this.prisma.user.update({
       where: { id: userId },
