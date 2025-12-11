@@ -13,7 +13,9 @@ import {
   UpdateTicketDto,
   QueryTicketDto,
   QueryMyTicketDto,
+  QueryEventAttendeesDto,
 } from './dto';
+import { TicketStatus } from '@prisma/client';
 
 @Injectable()
 export class TicketService {
@@ -920,5 +922,154 @@ export class TicketService {
         },
       });
     }
+  }
+
+  /**
+   * Get attendees and summary for a specific event
+   */
+  async getEventAttendees(
+    eventId: string,
+    query: QueryEventAttendeesDto,
+    currentUser?: { id?: number; roleName?: string },
+  ) {
+    // 1) Permission checks
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        organizer: {
+          select: { ownerId: true },
+        },
+        eventStaffs: {
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    const isAdmin = currentUser?.roleName === 'admin';
+    const isOrganizerOwner =
+      currentUser?.roleName === 'event_organizer' &&
+      event.organizer?.ownerId === currentUser?.id;
+    const isAssignedStaff =
+      currentUser?.roleName === 'staff' &&
+      event.eventStaffs.some((s) => s.userId === currentUser?.id);
+
+    if (!isAdmin && !isOrganizerOwner && !isAssignedStaff) {
+      throw new ForbiddenException(
+        'You are not allowed to view attendees of this event',
+      );
+    }
+
+    // 2) Filters & pagination
+    const { page = 1, limit = 10, search, status } = query;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.TicketWhereInput = {
+      eventId,
+    };
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (search) {
+      where.OR = [
+        { user: { userName: { contains: search, mode: 'insensitive' } } },
+        { user: { firstName: { contains: search, mode: 'insensitive' } } },
+        { user: { lastName: { contains: search, mode: 'insensitive' } } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+        { user: { studentCode: { contains: search, mode: 'insensitive' } } },
+      ];
+    }
+
+    // 3) Query data & counts
+    const [tickets, total, usedCount, cancelledCount] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { bookingDate: 'desc' },
+        select: {
+          id: true,
+          qrCode: true,
+          status: true,
+          bookingDate: true,
+          checkinTime: true,
+          user: {
+            select: {
+              id: true,
+              userName: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phoneNumber: true,
+              studentCode: true,
+            },
+          },
+          seat: {
+            select: {
+              rowLabel: true,
+              colLabel: true,
+              seatType: true,
+            },
+          },
+        },
+      }),
+      this.prisma.ticket.count({ where }),
+      this.prisma.ticket.count({
+        where: { ...where, status: TicketStatus.USED },
+      }),
+      this.prisma.ticket.count({
+        where: { ...where, status: TicketStatus.CANCELLED },
+      }),
+    ]);
+
+    const notCheckin = total - usedCount - cancelledCount;
+    const attendanceRate =
+      total > 0 ? Math.round((usedCount / total) * 100) : 0;
+
+    // 4) Map response
+    const data = tickets.map((t) => ({
+      ticketId: t.id,
+      qrCode: t.qrCode,
+      status: t.status,
+      bookingDate: t.bookingDate,
+      checkinTime: t.checkinTime,
+      fullName:
+        `${t.user.firstName ?? ''} ${t.user.lastName ?? ''}`.trim() ||
+        t.user.userName,
+      email: t.user.email,
+      phoneNumber: t.user.phoneNumber,
+      studentCode: t.user.studentCode,
+      seat: t.seat
+        ? {
+            label: `${t.seat.rowLabel}${t.seat.colLabel}`,
+            row: t.seat.rowLabel,
+            col: t.seat.colLabel,
+            type: t.seat.seatType,
+          }
+        : null,
+    }));
+
+    return {
+      summary: {
+        totalRegistered: total,
+        checkedIn: usedCount,
+        notCheckin,
+        cancelled: cancelledCount,
+        attendanceRate,
+      },
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }

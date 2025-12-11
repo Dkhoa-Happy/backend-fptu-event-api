@@ -23,6 +23,7 @@ import {
   QueryTicketDto,
   QueryMyTicketDto,
   ScanTicketDto,
+  QueryEventAttendeesDto,
 } from './dto';
 import { JwtGuard, RolesGuard } from '../auth/guard';
 import { GetUser, Roles } from '../auth/decorator';
@@ -96,6 +97,30 @@ export class TicketController {
     @Query() query: QueryMyTicketDto,
   ) {
     return this.ticketService.findMyTickets(userId, query);
+  }
+
+  @Get('events/:eventId/attendees')
+  @Roles(UserRole.admin, UserRole.staff, UserRole.event_organizer)
+  @ApiOperation({
+    summary:
+      'Get attendees of an event with summary - Required roles: admin, staff, event_organizer',
+    description:
+      'Returns attendee list (tickets) and summary (total, checked-in, not check-in, cancelled, attendance rate). Staff must be assigned to the event; organizer must own the organizer.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Attendees retrieved successfully',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Forbidden. Staff must be assigned; organizer must own this organizer; admin can view any.',
+  })
+  async getEventAttendees(
+    @Param('eventId') eventId: string,
+    @Query() query: QueryEventAttendeesDto,
+    @GetUser() user: any,
+  ) {
+    return this.ticketService.getEventAttendees(eventId, query, user);
   }
 
   @Get('qr/:qrCode')
