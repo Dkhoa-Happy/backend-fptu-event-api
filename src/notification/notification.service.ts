@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import * as OneSignal from '@onesignal/node-onesignal';
-import { EventStatus, Prisma } from '@prisma/client';
+import { EventStatus, Prisma, IncidentSeverity } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { TestSendDto } from './dto/test-send.dto';
@@ -356,6 +356,90 @@ export class NotificationService {
         `Failed to send event status notification to organizer owner ${organizerOwnerId} for event ${event.id}: ${String(
           error,
         )}`,
+      );
+    }
+  }
+
+  /**
+   * Gửi thông báo khi staff báo cáo sự cố trước sự kiện
+   * Gửi cho: tất cả admin + organizer owner của event (nếu có)
+   */
+  async notifyIncidentReported(params: {
+    incidentId: number;
+    eventId: string;
+    eventTitle: string;
+    severity: IncidentSeverity;
+    reporterName?: string;
+    organizerOwnerId?: number | null;
+  }) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping incident notification.',
+      );
+      return;
+    }
+
+    // Lấy subscription của admin
+    const adminSubs = await this.prisma.userSubscription.findMany({
+      where: {
+        user: {
+          roleName: 'admin',
+          isActive: true,
+        },
+      },
+      select: { subscriptionId: true },
+    });
+
+    // Lấy subscription của organizer owner (nếu có)
+    let organizerSubs: { subscriptionId: string }[] = [];
+    if (params.organizerOwnerId) {
+      organizerSubs = await this.prisma.userSubscription.findMany({
+        where: {
+          userId: params.organizerOwnerId,
+          user: { isActive: true },
+        },
+        select: { subscriptionId: true },
+      });
+    }
+
+    const playerIds = Array.from(
+      new Set(
+        [...adminSubs, ...organizerSubs].map((s) => s.subscriptionId),
+      ),
+    );
+
+    if (playerIds.length === 0) {
+      this.logger.warn(
+        `No subscriptions found for incident ${params.incidentId}. Skipping notification.`,
+      );
+      return;
+    }
+
+    const heading = 'Báo cáo sự cố mới';
+    const content = `${params.eventTitle} - Mức độ: ${params.severity}`;
+
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        type: 'incident_reported',
+        incidentId: params.incidentId,
+        eventId: params.eventId,
+        severity: params.severity,
+        reporterName: params.reporterName,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent incident notification to admins/organizer for incident ${params.incidentId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send incident notification ${params.incidentId}: ${String(error)}`,
       );
     }
   }

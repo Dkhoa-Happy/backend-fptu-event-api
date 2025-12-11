@@ -512,6 +512,7 @@ function App() {
 | `event_rejected` | Event bị admin reject           | Organizer owner   | `eventId`, `status`               |
 | `one_day`        | Event sắp diễn ra trong 1 ngày  | Tất cả users      | `eventId`, `startTime`            |
 | `thirty_min`     | Event sắp diễn ra trong 30 phút | Tất cả users      | `eventId`, `startTime`            |
+| `incident_reported` | Staff báo cáo sự cố trước sự kiện | Admin + Organizer owner | `eventId`, `incidentId`, `severity`, `reporterName` |
 
 ### Ví dụ xử lý trong Frontend:
 
@@ -545,6 +546,15 @@ OneSignal.addClickListener((event) => {
       showToast(
         'Sự kiện của bạn đã bị từ chối. Vui lòng kiểm tra lại thông tin.',
       );
+      navigateToEvent(data.eventId);
+      break;
+
+    case 'incident_reported':
+      // Thông báo sự cố mới
+      showToast(
+        `Báo cáo sự cố mới - Mức độ: ${data.severity || 'MEDIUM'} - ${data.reporterName || ''}`,
+      );
+      // Điều hướng đến trang quản lý/chi tiết event hoặc incident (tùy FE)
       navigateToEvent(data.eventId);
       break;
 
@@ -589,6 +599,15 @@ OneSignal.setNotificationOpenedHandler((event) => {
         navigation.navigate('MyEvents', {
           eventId: data.eventId,
           status: data.status,
+        });
+        break;
+
+      case 'incident_reported':
+        // Admin/Organizer: điều hướng đến incident list/detail hoặc event detail
+        navigation.navigate('Incidents', {
+          eventId: data.eventId,
+          incidentId: data.incidentId,
+          severity: data.severity,
         });
         break;
 
