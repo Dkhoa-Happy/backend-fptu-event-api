@@ -88,6 +88,9 @@ model User {
   // Quan hệ: User là Chủ nhiệm của Organizer
   ownedOrganizers Organizer[] @relation("OrganizerOwner")
 
+  // Quan hệ: User có subscription OneSignal
+  subscriptions UserSubscription[]
+
   @@map("users")
 }
 
@@ -305,6 +308,21 @@ model EventStaff {
   // Đảm bảo mỗi user chỉ được add vào 1 event 1 lần
   @@unique([eventId, userId])
   @@map("event_staffs")
+}
+
+// Lưu subscription OneSignal của user để gửi thông báo đích danh
+model UserSubscription {
+  id             Int      @id @default(autoincrement())
+  subscriptionId String   @unique @map("subscription_id")
+  deviceId       String?  @map("device_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Quan hệ: User có subscription
+  userId Int  @map("user_id")
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_subscriptions")
 }
 
 // Lưu log thông báo để tránh gửi trùng

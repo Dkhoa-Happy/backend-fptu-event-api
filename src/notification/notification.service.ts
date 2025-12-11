@@ -174,11 +174,189 @@ export class NotificationService {
   }
 
   async createSubscription(userId: number, dto: CreateSubscriptionDto) {
-    // Lưu subscription vào DB nếu muốn gửi đích danh (chưa có bảng, ví dụ chỉ log)
-    // Tạm thời chỉ log để FE biết đã nhận
+    // Lưu subscription vào DB để gửi đích danh
+    await this.prisma.userSubscription.upsert({
+      where: { subscriptionId: dto.subscriptionId },
+      update: {
+        userId,
+        deviceId: dto.deviceId,
+        updatedAt: new Date(),
+      },
+      create: {
+        userId,
+        subscriptionId: dto.subscriptionId,
+        deviceId: dto.deviceId,
+      },
+    });
+
     this.logger.log(
       `Registered subscription for user ${userId}: ${dto.subscriptionId} device=${dto.deviceId}`,
     );
     return { registered: true };
+  }
+
+  /**
+   * Gửi thông báo cho staff khi được assign vào event
+   * @param userId - ID của staff được assign
+   * @param event - Thông tin event
+   */
+  async notifyStaffAssigned(
+    userId: number,
+    event: {
+      id: string;
+      title: string;
+      startTime: Date;
+      endTime: Date;
+      organizer?: { name: string } | null;
+    },
+  ) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping staff assignment notification.',
+      );
+      return;
+    }
+
+    // Lấy subscriptionId của user từ DB
+    const subscriptions = await this.prisma.userSubscription.findMany({
+      where: { userId },
+      select: { subscriptionId: true },
+    });
+
+    // Nếu user chưa có subscription, không gửi thông báo
+    if (subscriptions.length === 0) {
+      this.logger.warn(
+        `User ${userId} has no OneSignal subscription. Skipping notification.`,
+      );
+      return;
+    }
+
+    const heading = 'Bạn đã được phân công làm staff cho sự kiện';
+    const startTimeStr = new Date(event.startTime).toLocaleString('vi-VN', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+    const content = `${event.title} - Bắt đầu: ${startTimeStr}`;
+
+    // Lấy danh sách subscriptionId để gửi đích danh
+    const playerIds = subscriptions.map((sub) => sub.subscriptionId);
+
+    // Sử dụng type assertion vì OneSignal SDK type có thể không đầy đủ
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      // Gửi đích danh cho user thông qua subscriptionId (player ID)
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        eventId: event.id,
+        type: 'staff_assigned',
+        startTime: event.startTime,
+        endTime: event.endTime,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent staff assignment notification to user ${userId} (${playerIds.length} device(s)) for event ${event.id}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send staff assignment notification to user ${userId} for event ${event.id}: ${String(
+          error,
+        )}`,
+      );
+    }
+  }
+
+  /**
+   * Gửi thông báo cho organizer khi event status thay đổi
+   * @param organizerOwnerId - ID của organizer owner (user tạo event)
+   * @param event - Thông tin event
+   * @param status - Status mới của event (PENDING, PUBLISHED, CANCELED)
+   */
+  async notifyEventStatusChange(
+    organizerOwnerId: number,
+    event: {
+      id: string;
+      title: string;
+      status: string;
+    },
+    status: 'PENDING' | 'PUBLISHED' | 'CANCELED',
+  ) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping event status notification.',
+      );
+      return;
+    }
+
+    // Lấy subscriptionId của organizer owner từ DB
+    const subscriptions = await this.prisma.userSubscription.findMany({
+      where: { userId: organizerOwnerId },
+      select: { subscriptionId: true },
+    });
+
+    // Nếu user chưa có subscription, không gửi thông báo
+    if (subscriptions.length === 0) {
+      this.logger.warn(
+        `Organizer owner ${organizerOwnerId} has no OneSignal subscription. Skipping notification.`,
+      );
+      return;
+    }
+
+    // Tạo nội dung thông báo dựa trên status
+    let heading: string;
+    let content: string;
+    let notificationType: string;
+
+    switch (status) {
+      case 'PENDING':
+        heading = 'Sự kiện của bạn đã được tạo thành công';
+        content = `Sự kiện "${event.title}" đang chờ admin phê duyệt`;
+        notificationType = 'event_created';
+        break;
+      case 'PUBLISHED':
+        heading = 'Sự kiện của bạn đã được phê duyệt';
+        content = `Sự kiện "${event.title}" đã được admin phê duyệt và đã được công bố`;
+        notificationType = 'event_approved';
+        break;
+      case 'CANCELED':
+        heading = 'Sự kiện của bạn đã bị từ chối';
+        content = `Sự kiện "${event.title}" đã bị admin từ chối`;
+        notificationType = 'event_rejected';
+        break;
+      default:
+        return; // Không gửi nếu status không hợp lệ
+    }
+
+    // Lấy danh sách subscriptionId để gửi đích danh
+    const playerIds = subscriptions.map((sub) => sub.subscriptionId);
+
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        eventId: event.id,
+        type: notificationType,
+        status: status,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent event status notification (${status}) to organizer owner ${organizerOwnerId} for event ${event.id}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send event status notification to organizer owner ${organizerOwnerId} for event ${event.id}: ${String(
+          error,
+        )}`,
+      );
+    }
   }
 }
