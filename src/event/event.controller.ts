@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Put,
@@ -179,6 +180,36 @@ export class EventController {
     @GetUser() user: any,
   ) {
     return this.eventService.assignStaff(eventId, dto, {
+      userId: user.id,
+      roleName: user.roleName,
+    });
+  }
+
+  @Delete(':eventId/staff/:userId')
+  @Roles(UserRole.admin, UserRole.event_organizer)
+  @ApiOperation({
+    summary: 'Remove staff from event - Required roles: admin, event_organizer',
+    description:
+      'Removes a staff member from an event. Only the event organizer owner or admin can remove staff.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Staff removed from event successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Event, Staff, or assignment not found',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Forbidden. Required roles: admin, event_organizer. Or you do not own this event organizer.',
+  })
+  async removeStaff(
+    @Param('eventId') eventId: string,
+    @Param('userId', ParseIntPipe) userId: number,
+    @GetUser() user: any,
+  ) {
+    return this.eventService.removeStaff(eventId, userId, {
       userId: user.id,
       roleName: user.roleName,
     });

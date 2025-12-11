@@ -8,6 +8,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Max,
   MaxLength,
   Min,
@@ -45,6 +46,7 @@ export class CreateEventDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(2000, { message: 'Description must not exceed 2000 characters' })
   description?: string;
 
   @ApiPropertyOptional({
@@ -53,11 +55,12 @@ export class CreateEventDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'Category must not exceed 100 characters' })
   category?: string;
 
   @ApiPropertyOptional({ example: 'https://example.com/banner.jpg' })
   @IsOptional()
-  @IsString()
+  @IsUrl({}, { message: 'bannerUrl must be a valid URL' })
   bannerUrl?: string;
 
   @ApiProperty({

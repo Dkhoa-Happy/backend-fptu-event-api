@@ -254,6 +254,78 @@ export class EventService {
           'Tất cả staff gán cho sự kiện phải là tài khoản staff đang hoạt động',
         );
       }
+
+      // Check for staff time conflicts with existing events
+      const startTime = new Date(dto.startTime);
+      const endTime = new Date(dto.endTime);
+      for (const staffId of staffIds) {
+        const conflictingAssignments = await this.prisma.eventStaff.findMany({
+          where: {
+            userId: staffId,
+            event: {
+              status: {
+                in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+              },
+              // Check if time ranges overlap
+              OR: [
+                // New event starts during existing event
+                {
+                  AND: [
+                    { startTime: { lte: startTime } },
+                    { endTime: { gt: startTime } },
+                  ],
+                },
+                // New event ends during existing event
+                {
+                  AND: [
+                    { startTime: { lt: endTime } },
+                    { endTime: { gte: endTime } },
+                  ],
+                },
+                // New event completely contains existing event
+                {
+                  AND: [
+                    { startTime: { gte: startTime } },
+                    { endTime: { lte: endTime } },
+                  ],
+                },
+                // Existing event completely contains new event
+                {
+                  AND: [
+                    { startTime: { lte: startTime } },
+                    { endTime: { gte: endTime } },
+                  ],
+                },
+              ],
+            },
+          },
+          include: {
+            event: {
+              select: {
+                id: true,
+                title: true,
+                startTime: true,
+                endTime: true,
+                status: true,
+              },
+            },
+            user: {
+              select: {
+                id: true,
+                userName: true,
+              },
+            },
+          },
+        });
+
+        if (conflictingAssignments.length > 0) {
+          const conflictingEvent = conflictingAssignments[0].event;
+          const staffUser = conflictingAssignments[0].user;
+          throw new BadRequestException(
+            `Staff ${staffUser.userName} (ID: ${staffId}) đã được phân công cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Không thể phân công cùng lúc cho nhiều sự kiện trong cùng khoảng thời gian.`,
+          );
+        }
+      }
     }
 
     // Validate speakers if provided
@@ -269,6 +341,70 @@ export class EventService {
         throw new NotFoundException(
           `Không tìm thấy speaker với id: ${missing.join(', ')}`,
         );
+      }
+
+      // Check for speaker time conflicts with existing events
+      const startTime = new Date(dto.startTime);
+      const endTime = new Date(dto.endTime);
+      for (const speakerId of speakerIds) {
+        const conflictingAssignment = await this.prisma.eventSpeaker.findFirst({
+          where: {
+            speakerId: speakerId,
+            event: {
+              status: {
+                in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+              },
+              OR: [
+                {
+                  AND: [
+                    { startTime: { lte: startTime } },
+                    { endTime: { gt: startTime } },
+                  ],
+                },
+                {
+                  AND: [
+                    { startTime: { lt: endTime } },
+                    { endTime: { gte: endTime } },
+                  ],
+                },
+                {
+                  AND: [
+                    { startTime: { gte: startTime } },
+                    { endTime: { lte: endTime } },
+                  ],
+                },
+                {
+                  AND: [
+                    { startTime: { lte: startTime } },
+                    { endTime: { gte: endTime } },
+                  ],
+                },
+              ],
+            },
+          },
+          include: {
+            event: {
+              select: {
+                id: true,
+                title: true,
+                startTime: true,
+                endTime: true,
+              },
+            },
+            speaker: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        });
+
+        if (conflictingAssignment) {
+          throw new BadRequestException(
+            `Speaker ${conflictingAssignment.speaker.name} (ID: ${speakerId}) đã được phân công cho sự kiện "${conflictingAssignment.event.title}" từ ${new Date(conflictingAssignment.event.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingAssignment.event.endTime).toLocaleString('vi-VN')}. Không thể phân công trùng lịch.`,
+          );
+        }
       }
     }
 
@@ -1483,6 +1619,92 @@ export class EventService {
         (error as { code: string }).code === 'P2003'
       ) {
         throw new NotFoundException('Event or User not found');
+      }
+
+      throw error;
+    }
+  }
+
+  async removeStaff(
+    eventId: string,
+    userId: number,
+    currentUser?: { userId?: number; roleName?: string },
+  ) {
+    // Check if event exists
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            ownerId: true,
+          },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Event with ID ${eventId} not found`);
+    }
+
+    // Check permission: admin can remove from any event, event_organizer only from their own events
+    if (currentUser?.roleName === 'event_organizer' && currentUser.userId) {
+      // Kiểm tra xem user có phải là owner của organizer không
+      if (!event.organizer.ownerId) {
+        throw new ForbiddenException(
+          'This organizer does not have an owner. You cannot remove staff from events of this organizer.',
+        );
+      }
+
+      if (event.organizer.ownerId !== currentUser.userId) {
+        throw new ForbiddenException(
+          'You do not have permission to remove staff from this event. You are not the owner of this organizer.',
+        );
+      }
+    }
+    // Admin can remove from any event, so no check needed
+
+    // Check if EventStaff exists
+    const eventStaff = await this.prisma.eventStaff.findFirst({
+      where: {
+        eventId: eventId,
+        userId: userId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            userName: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    if (!eventStaff) {
+      throw new NotFoundException(
+        `Staff with ID ${userId} is not assigned to event ${eventId}`,
+      );
+    }
+
+    try {
+      await this.prisma.eventStaff.delete({
+        where: { id: eventStaff.id },
+      });
+
+      return {
+        message: `Staff ${eventStaff.user.userName} (ID: ${userId}) has been removed from event ${eventId}`,
+      };
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === 'P2025'
+      ) {
+        throw new NotFoundException('EventStaff not found');
       }
 
       throw error;
