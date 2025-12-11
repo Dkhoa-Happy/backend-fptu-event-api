@@ -1677,7 +1677,7 @@ export class EventService {
             `Failed to send notification to staff ${dto.userId}:`,
             error,
           );
-        });
+      });
 
       return eventStaff;
     } catch (error: unknown) {

@@ -11,6 +11,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationService } from '../notification/notification.service';
 import {
   CreateIncidentDto,
   UpdateIncidentStatusDto,
@@ -20,7 +21,10 @@ import {
 
 @Injectable()
 export class IncidentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   async createIncident(dto: CreateIncidentDto, reporterId: number) {
     const event = await this.prisma.event.findUnique({
@@ -30,6 +34,11 @@ export class IncidentService {
         title: true,
         startTime: true,
         status: true,
+        organizer: {
+          select: {
+            ownerId: true,
+          },
+        },
       },
     });
 
@@ -75,6 +84,28 @@ export class IncidentService {
       },
       include: this.defaultInclude(),
     });
+
+    // Gửi thông báo cho admin và organizer owner
+    const reporter = incident.reporter;
+    this.notificationService
+      .notifyIncidentReported({
+        incidentId: incident.id,
+        eventId: event.id,
+        eventTitle: event.title,
+        severity: incident.severity,
+        reporterName:
+          reporter?.firstName || reporter?.lastName
+            ? `${reporter?.firstName ?? ''} ${reporter?.lastName ?? ''}`.trim()
+            : reporter?.userName ?? 'Staff',
+        organizerOwnerId: event.organizer?.ownerId ?? null,
+      })
+      .catch((error) => {
+        // Log lỗi nhưng không chặn flow tạo incident
+        console.error(
+          `Failed to send incident notification for event ${event.id}:`,
+          error,
+        );
+      });
 
     return {
       message: 'Đã tạo báo cáo sự cố',
@@ -317,6 +348,11 @@ export class IncidentService {
           title: true,
           startTime: true,
           endTime: true,
+          organizer: {
+            select: {
+              ownerId: true,
+            },
+          },
         },
       },
     };
