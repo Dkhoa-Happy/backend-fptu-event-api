@@ -163,6 +163,19 @@ export class UserController {
     return this.userService.deactivateUser(id);
   }
 
+  @Patch(':id/activate')
+  @Roles(UserRole.admin)
+  @ApiOperation({
+    summary: 'Activate user (reactivate) - Required roles: admin',
+  })
+  @ApiResponse({ status: 200, description: 'User activated successfully' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: admin',
+  })
+  async activateUser(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.activateUser(id);
+  }
+
   @Patch(':id/status')
   @Roles(UserRole.admin)
   @ApiOperation({
