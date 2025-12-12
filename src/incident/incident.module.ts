@@ -10,4 +10,3 @@ import { NotificationModule } from '../notification/notification.module';
   providers: [IncidentService],
 })
 export class IncidentModule {}
-

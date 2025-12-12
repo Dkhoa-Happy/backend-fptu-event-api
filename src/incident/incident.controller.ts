@@ -55,10 +55,7 @@ export class IncidentController {
     summary:
       'Xem tất cả sự cố với bộ lọc - Admin xem tất cả, Event Organizer chỉ xem sự cố của sự kiện mình sở hữu',
   })
-  getAllIncidents(
-    @Query() filters: FilterIncidentsDto,
-    @GetUser() user: any,
-  ) {
+  getAllIncidents(@Query() filters: FilterIncidentsDto, @GetUser() user: any) {
     return this.incidentService.getAllIncidents(filters, user);
   }
 

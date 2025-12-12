@@ -218,6 +218,7 @@ CREATE TABLE "incidents" (
     "id" SERIAL NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT,
+    "image_url" TEXT,
     "severity" "IncidentSeverity" NOT NULL DEFAULT 'MEDIUM',
     "status" "IncidentStatus" NOT NULL DEFAULT 'OPEN',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
