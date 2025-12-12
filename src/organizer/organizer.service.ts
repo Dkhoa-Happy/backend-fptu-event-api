@@ -68,7 +68,7 @@ export class OrganizerService {
         'code' in error &&
         (error as { code: string }).code === 'P2002'
       ) {
-        throw new BadRequestException('Organizer with this name already exists');
+        throw new BadRequestException('Organizer với tên này đã tồn tại');
       }
       throw error;
     }
@@ -128,7 +128,7 @@ export class OrganizerService {
     });
 
     if (!organizer) {
-      throw new NotFoundException(`Organizer with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy organizer với ID ${id}`);
     }
 
     return organizer;
@@ -141,7 +141,7 @@ export class OrganizerService {
     });
 
     if (!existingOrganizer) {
-      throw new NotFoundException(`Organizer with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy organizer với ID ${id}`);
     }
 
     // Validate owner_id if provided
@@ -206,7 +206,7 @@ export class OrganizerService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException(`Organizer with ID ${id} not found`);
+        throw new NotFoundException(`Không tìm thấy organizer với ID ${id}`);
       }
 
       if (
@@ -215,7 +215,7 @@ export class OrganizerService {
         'code' in error &&
         (error as { code: string }).code === 'P2002'
       ) {
-        throw new BadRequestException('Organizer with this name already exists');
+        throw new BadRequestException('Organizer với tên này đã tồn tại');
       }
 
       throw error;
@@ -229,7 +229,7 @@ export class OrganizerService {
     });
 
     if (!organizer) {
-      throw new NotFoundException(`Organizer with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy organizer với ID ${id}`);
     }
 
     try {
@@ -237,7 +237,7 @@ export class OrganizerService {
         where: { id },
       });
 
-      return { message: `Organizer with ID ${id} has been deleted successfully` };
+      return { message: `Đã xóa organizer với ID ${id} thành công` };
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -245,7 +245,7 @@ export class OrganizerService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException(`Organizer with ID ${id} not found`);
+        throw new NotFoundException(`Không tìm thấy organizer với ID ${id}`);
       }
 
       // Handle foreign key constraint errors
@@ -256,7 +256,7 @@ export class OrganizerService {
         (error as { code: string }).code === 'P2003'
       ) {
         throw new BadRequestException(
-          'Cannot delete organizer because it is referenced by other records (e.g., events)',
+          'Không thể xóa organizer vì nó đang được tham chiếu bởi các bản ghi khác (ví dụ: sự kiện)',
         );
       }
 

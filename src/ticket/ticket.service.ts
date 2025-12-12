@@ -36,7 +36,7 @@ export class TicketService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Không tìm thấy user');
     }
 
     // Check if event exists and get registration time
@@ -68,7 +68,7 @@ export class TicketService {
     // Check if event is published
     if (event.status !== 'PUBLISHED') {
       throw new BadRequestException(
-        'Cannot register for this event. Event is not published yet.',
+        'Không thể đăng ký sự kiện này. Sự kiện chưa được công bố.',
       );
     }
 
@@ -103,13 +103,13 @@ export class TicketService {
 
     if (now < startTime) {
       throw new BadRequestException(
-        `Registration has not started yet. Registration starts at ${startTime.toISOString()}`,
+        `Đăng ký chưa bắt đầu. Đăng ký bắt đầu lúc ${startTime.toISOString()}`,
       );
     }
 
     if (now > endTime) {
       throw new BadRequestException(
-        `Registration has ended. Registration ended at ${endTime.toISOString()}`,
+        `Đăng ký đã kết thúc. Đăng ký kết thúc lúc ${endTime.toISOString()}`,
       );
     }
 
@@ -122,7 +122,7 @@ export class TicketService {
     });
 
     if (existingTicket) {
-      throw new BadRequestException('User already registered for this event');
+      throw new BadRequestException('User đã đăng ký sự kiện này');
     }
 
     // Check if seat exists and is active
@@ -136,11 +136,11 @@ export class TicketService {
     });
 
     if (!seat) {
-      throw new NotFoundException(`Seat with ID ${dto.seatId} not found`);
+      throw new NotFoundException(`Không tìm thấy ghế với ID ${dto.seatId}`);
     }
 
     if (!seat.isActive) {
-      throw new BadRequestException('Seat is not active');
+      throw new BadRequestException('Ghế không đang hoạt động');
     }
 
     // Validate that seat belongs to the event's venue
@@ -191,9 +191,9 @@ export class TicketService {
     }
 
     if (!isUnique) {
-      throw new BadRequestException(
-        'Failed to generate unique QR code. Please try again.',
-      );
+        throw new BadRequestException(
+          'Không thể tạo mã QR duy nhất. Vui lòng thử lại.',
+        );
     }
 
     try {
@@ -209,7 +209,7 @@ export class TicketService {
         });
 
         if (!currentEvent) {
-          throw new NotFoundException(`Event with ID ${dto.eventId} not found`);
+          throw new NotFoundException(`Không tìm thấy sự kiện với ID ${dto.eventId}`);
         }
 
         if (currentEvent.registeredCount >= currentEvent.maxCapacity) {
@@ -311,7 +311,7 @@ export class TicketService {
           throw new BadRequestException('Ghế này đã được chọn');
         }
 
-        throw new BadRequestException('Unique constraint violation');
+        throw new BadRequestException('Vi phạm ràng buộc duy nhất');
       }
 
       if (
@@ -448,7 +448,7 @@ export class TicketService {
     });
 
     if (!ticket) {
-      throw new NotFoundException(`Ticket with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy vé với ID ${id}`);
     }
 
     return ticket;
@@ -618,7 +618,7 @@ export class TicketService {
     });
 
     if (!ticket) {
-      throw new NotFoundException(`Ticket with QR code ${qrCode} not found`);
+      throw new NotFoundException(`Không tìm thấy vé với mã QR ${qrCode}`);
     }
 
     // Check and update expired tickets
@@ -681,7 +681,7 @@ export class TicketService {
     });
 
     if (!existingTicket) {
-      throw new NotFoundException(`Ticket with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy vé với ID ${id}`);
     }
 
     try {
@@ -738,7 +738,7 @@ export class TicketService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException(`Ticket with ID ${id} not found`);
+        throw new NotFoundException(`Không tìm thấy vé với ID ${id}`);
       }
 
       throw error;
@@ -752,7 +752,7 @@ export class TicketService {
     });
 
     if (!ticket) {
-      throw new NotFoundException(`Ticket with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy vé với ID ${id}`);
     }
 
     try {
@@ -786,7 +786,7 @@ export class TicketService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException(`Ticket with ID ${id} not found`);
+        throw new NotFoundException(`Không tìm thấy vé với ID ${id}`);
       }
 
       // Handle foreign key constraint errors
@@ -797,7 +797,7 @@ export class TicketService {
         (error as { code: string }).code === 'P2003'
       ) {
         throw new BadRequestException(
-          'Cannot delete ticket because it is referenced by other records',
+          'Không thể xóa vé vì nó đang được tham chiếu bởi các bản ghi khác',
         );
       }
 
@@ -812,7 +812,7 @@ export class TicketService {
     });
 
     if (!staff) {
-      throw new NotFoundException(`Staff with ID ${staffId} not found`);
+      throw new NotFoundException(`Không tìm thấy staff với ID ${staffId}`);
     }
 
     // Use transaction to ensure data consistency
@@ -850,7 +850,7 @@ export class TicketService {
       });
 
       if (!ticket) {
-        throw new NotFoundException(`Ticket with QR code ${qrCode} not found`);
+        throw new NotFoundException(`Không tìm thấy vé với mã QR ${qrCode}`);
       }
 
       // Check if staff is assigned to this event
@@ -863,7 +863,7 @@ export class TicketService {
 
       if (!eventStaff) {
         throw new ForbiddenException(
-          'You are not assigned to this event. Only assigned staff can scan tickets for this event.',
+          'Bạn không được phân công cho sự kiện này. Chỉ staff được phân công mới có thể quét vé cho sự kiện này.',
         );
       }
 
@@ -882,7 +882,7 @@ export class TicketService {
       if (ticket.status === 'USED') {
         return {
           success: false,
-          message: 'Ticket already used',
+          message: 'Vé đã được sử dụng',
           ticket: null,
         };
       }
@@ -890,7 +890,7 @@ export class TicketService {
       if (ticket.status === 'CANCELLED') {
         return {
           success: false,
-          message: 'Ticket cancelled',
+          message: 'Vé đã bị hủy',
           ticket: null,
         };
       }
@@ -898,7 +898,7 @@ export class TicketService {
       if (ticket.status === 'EXPIRED') {
         return {
           success: false,
-          message: 'Ticket expired. Event has ended.',
+          message: 'Vé đã hết hạn. Sự kiện đã kết thúc.',
           ticket: null,
         };
       }
@@ -953,7 +953,7 @@ export class TicketService {
 
         return {
           success: true,
-          message: 'Check-in successful',
+          message: 'Check-in thành công',
           ticket: updatedTicket,
           user: updatedTicket.user,
         };
@@ -961,7 +961,7 @@ export class TicketService {
 
       return {
         success: false,
-        message: `Unknown ticket status: ${String(ticket.status)}`,
+        message: `Trạng thái vé không xác định: ${String(ticket.status)}`,
         ticket: null,
       };
     });
@@ -1048,9 +1048,9 @@ export class TicketService {
       event.eventStaffs.some((s) => s.userId === currentUser?.id);
 
     if (!isAdmin && !isOrganizerOwner && !isAssignedStaff) {
-      throw new ForbiddenException(
-        'You are not allowed to view attendees of this event',
-      );
+        throw new ForbiddenException(
+          'Bạn không được phép xem danh sách người tham dự của sự kiện này',
+        );
     }
 
     // 2) Filters & pagination
