@@ -217,4 +217,30 @@ export class VenueService {
       throw new BadRequestException('Lỗi khi xóa venue');
     }
   }
+
+  async activateVenue(id: number) {
+    try {
+      const existingVenue = await this.prisma.venue.findUnique({
+        where: { id },
+      });
+      if (!existingVenue) {
+        throw new BadRequestException('Venue không tồn tại');
+      }
+      const response = await this.prisma.venue.update({
+        where: { id },
+        data: {
+          status: 'ACTIVE',
+        },
+      });
+      return { message: 'Kích hoạt venue thành công', venue: response };
+    } catch (error: unknown) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw new BadRequestException('Lỗi khi kích hoạt venue');
+    }
+  }
 }
