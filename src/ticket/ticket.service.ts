@@ -245,6 +245,14 @@ export class TicketService {
                 startTime: true,
                 endTime: true,
                 status: true,
+                bannerUrl: true,
+                venue: {
+                  select: {
+                    id: true,
+                    name: true,
+                    location: true,
+                  },
+                },
               },
             },
             seat: {
@@ -362,6 +370,14 @@ export class TicketService {
               startTime: true,
               endTime: true,
               status: true,
+              bannerUrl: true,
+              venue: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                },
+              },
             },
           },
         },
@@ -401,6 +417,7 @@ export class TicketService {
             startTime: true,
             endTime: true,
             status: true,
+            bannerUrl: true,
             organizer: {
               select: {
                 id: true,
@@ -408,6 +425,23 @@ export class TicketService {
                 logoUrl: true,
               },
             },
+            venue: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
+              },
+            },
+          },
+        },
+        seat: {
+          select: {
+            id: true,
+            rowLabel: true,
+            colLabel: true,
+            seatType: true,
+            isActive: true,
+            isBooked: true,
           },
         },
       },
@@ -462,11 +496,19 @@ export class TicketService {
               startTime: true,
               endTime: true,
               status: true,
+              bannerUrl: true,
               organizer: {
                 select: {
                   id: true,
                   name: true,
                   logoUrl: true,
+                },
+              },
+              venue: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
                 },
               },
             },
@@ -492,7 +534,6 @@ export class TicketService {
             colLabel: true,
             seatType: true,
             isActive: true,
-            venueId: true,
           },
         },
         event: {
@@ -503,11 +544,19 @@ export class TicketService {
             startTime: true,
             endTime: true,
             status: true,
+            bannerUrl: true,
             organizer: {
               select: {
                 id: true,
                 name: true,
                 logoUrl: true,
+              },
+            },
+            venue: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
               },
             },
           },
@@ -548,11 +597,19 @@ export class TicketService {
             startTime: true,
             endTime: true,
             status: true,
+            bannerUrl: true,
             organizer: {
               select: {
                 id: true,
                 name: true,
                 logoUrl: true,
+              },
+            },
+            venue: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
               },
             },
           },
@@ -588,11 +645,19 @@ export class TicketService {
             startTime: true,
             endTime: true,
             status: true,
+            bannerUrl: true,
             organizer: {
               select: {
                 id: true,
                 name: true,
                 logoUrl: true,
+              },
+            },
+            venue: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
               },
             },
           },
@@ -652,6 +717,14 @@ export class TicketService {
               startTime: true,
               endTime: true,
               status: true,
+              bannerUrl: true,
+              venue: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                },
+              },
             },
           },
         },
@@ -763,6 +836,14 @@ export class TicketService {
               title: true,
               startTime: true,
               endTime: true,
+              bannerUrl: true,
+              venue: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                },
+              },
             },
           },
         },
@@ -847,6 +928,14 @@ export class TicketService {
                 title: true,
                 startTime: true,
                 endTime: true,
+                bannerUrl: true,
+                venue: {
+                  select: {
+                    id: true,
+                    name: true,
+                    location: true,
+                  },
+                },
               },
             },
           },

@@ -78,6 +78,7 @@ export class IncidentService {
       data: {
         title: dto.title,
         description: dto.description,
+        imageUrl: dto.imageUrl,
         severity: dto.severity ?? IncidentSeverity.MEDIUM,
         reporterId,
         eventId: dto.eventId,
@@ -96,7 +97,7 @@ export class IncidentService {
         reporterName:
           reporter?.firstName || reporter?.lastName
             ? `${reporter?.firstName ?? ''} ${reporter?.lastName ?? ''}`.trim()
-            : reporter?.userName ?? 'Staff',
+            : (reporter?.userName ?? 'Staff'),
         organizerOwnerId: event.organizer?.ownerId ?? null,
       })
       .catch((error) => {
@@ -158,7 +159,9 @@ export class IncidentService {
       }));
 
     if (!isAdmin && !isOrganizerOwner && !isAssignedStaff) {
-      throw new ForbiddenException('Bạn không có quyền xem sự cố của sự kiện này');
+      throw new ForbiddenException(
+        'Bạn không có quyền xem sự cố của sự kiện này',
+      );
     }
 
     return this.prisma.incident.findMany({
@@ -312,6 +315,9 @@ export class IncidentService {
     if (dto.description !== undefined) {
       updateData.description = dto.description;
     }
+    if (dto.imageUrl !== undefined) {
+      updateData.imageUrl = dto.imageUrl;
+    }
     if (dto.severity !== undefined) {
       updateData.severity = dto.severity;
     }
@@ -358,4 +364,3 @@ export class IncidentService {
     };
   }
 }
-

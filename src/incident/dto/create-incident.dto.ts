@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IncidentSeverity } from '@prisma/client';
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID, IsUrl, MaxLength, MinLength } from 'class-validator';
 
 export class CreateIncidentDto {
   @ApiProperty({
@@ -21,21 +21,28 @@ export class CreateIncidentDto {
   @MaxLength(120)
   title: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Mô tả chi tiết sự cố',
     example: 'Máy chiếu ở hội trường A không thể kết nối qua HDMI.',
-    required: false,
   })
   @IsOptional()
   @IsString()
   @MaxLength(1000)
   description?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
+    description: 'URL ảnh minh chứng cho sự cố',
+    example: 'https://example.com/incident-image.jpg',
+  })
+  @IsOptional()
+  @IsString()
+  @IsUrl({}, { message: 'imageUrl must be a valid URL' })
+  imageUrl?: string;
+
+  @ApiPropertyOptional({
     description: 'Mức độ ưu tiên của sự cố',
     enum: IncidentSeverity,
     default: IncidentSeverity.MEDIUM,
-    required: false,
   })
   @IsOptional()
   @IsEnum(IncidentSeverity)
