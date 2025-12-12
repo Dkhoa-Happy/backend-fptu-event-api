@@ -25,6 +25,7 @@ enum EventStatus {
   PENDING
   PUBLISHED
   CANCELED
+  COMPLETED
 }
 
 enum TicketStatus {

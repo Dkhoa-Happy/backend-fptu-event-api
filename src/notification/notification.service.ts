@@ -283,7 +283,7 @@ export class NotificationService {
       title: string;
       status: string;
     },
-    status: 'PENDING' | 'PUBLISHED' | 'CANCELED',
+    status: 'PENDING' | 'PUBLISHED' | 'CANCELED' | 'COMPLETED',
   ) {
     if (!this.oneSignalClient || !this.appId) {
       this.logger.warn(
@@ -403,9 +403,7 @@ export class NotificationService {
     }
 
     const playerIds = Array.from(
-      new Set(
-        [...adminSubs, ...organizerSubs].map((s) => s.subscriptionId),
-      ),
+      new Set([...adminSubs, ...organizerSubs].map((s) => s.subscriptionId)),
     );
 
     if (playerIds.length === 0) {

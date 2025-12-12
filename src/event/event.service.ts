@@ -726,6 +726,9 @@ export class EventService {
       items.map((e) => e.id),
     );
 
+    // Tự động cập nhật status của các event đã kết thúc sang COMPLETED
+    await this.checkAndUpdateMultipleEventStatuses(items.map((e) => e.id));
+
     return {
       data: items.map((e) => ({
         ...e,
@@ -853,9 +856,95 @@ export class EventService {
       }
     }
 
+    // Tự động cập nhật status của event sang COMPLETED nếu đã kết thúc
+    await this.checkAndUpdateEventStatus(id);
+
+    // Reload event để lấy status mới nhất nếu đã được cập nhật
+    const updatedEvent = await this.prisma.event.findUnique({
+      where: { id },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            contactEmail: true,
+            logoUrl: true,
+          },
+        },
+        venue: {
+          select: {
+            id: true,
+            name: true,
+            location: true,
+            hasSeats: true,
+            campusId: true,
+            campus: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                address: true,
+              },
+            },
+          },
+        },
+        host: {
+          select: {
+            id: true,
+            userName: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        eventSpeakers: {
+          select: {
+            id: true,
+            topic: true,
+            speaker: {
+              select: {
+                id: true,
+                name: true,
+                bio: true,
+                avatar: true,
+                type: true,
+                company: true,
+              },
+            },
+          },
+        },
+        ...(isStudent
+          ? {}
+          : {
+              eventStaffs: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      userName: true,
+                      email: true,
+                      firstName: true,
+                      lastName: true,
+                      avatar: true,
+                      roleName: true,
+                    },
+                  },
+                },
+              },
+            }),
+      },
+    });
+
+    if (!updatedEvent) {
+      throw new NotFoundException(`Event with ID ${id} not found`);
+    }
+
+    const updatedCheckinCount = await this.getCheckinCountByEventIds([id]);
+
     return {
-      ...event,
-      checkinCount,
+      ...updatedEvent,
+      checkinCount: updatedCheckinCount[id] ?? 0,
     };
   }
 
@@ -1677,7 +1766,7 @@ export class EventService {
             `Failed to send notification to staff ${dto.userId}:`,
             error,
           );
-      });
+        });
 
       return eventStaff;
     } catch (error: unknown) {
@@ -2052,5 +2141,65 @@ export class EventService {
       acc[item.eventId] = item._count._all;
       return acc;
     }, {});
+  }
+
+  /**
+   * Kiểm tra và tự động cập nhật status của event sang COMPLETED nếu đã kết thúc
+   * @param eventId - ID của event cần kiểm tra
+   */
+  private async checkAndUpdateEventStatus(eventId: string): Promise<void> {
+    try {
+      const now = new Date();
+      await this.prisma.event.updateMany({
+        where: {
+          id: eventId,
+          endTime: {
+            lt: now, // endTime < now (đã kết thúc)
+          },
+          status: {
+            in: [EventStatus.PENDING, EventStatus.PUBLISHED], // Chỉ update các event chưa completed hoặc canceled
+          },
+        },
+        data: {
+          status: EventStatus.COMPLETED,
+        },
+      });
+    } catch (error) {
+      // Log lỗi nhưng không throw để không ảnh hưởng đến flow chính
+      console.error(`Error updating event status for event ${eventId}:`, error);
+    }
+  }
+
+  /**
+   * Kiểm tra và tự động cập nhật status của nhiều events sang COMPLETED nếu đã kết thúc
+   * @param eventIds - Mảng ID của các events cần kiểm tra
+   */
+  private async checkAndUpdateMultipleEventStatuses(
+    eventIds: string[],
+  ): Promise<void> {
+    if (eventIds.length === 0) return;
+
+    try {
+      const now = new Date();
+      await this.prisma.event.updateMany({
+        where: {
+          id: {
+            in: eventIds,
+          },
+          endTime: {
+            lt: now, // endTime < now (đã kết thúc)
+          },
+          status: {
+            in: [EventStatus.PENDING, EventStatus.PUBLISHED], // Chỉ update các event chưa completed hoặc canceled
+          },
+        },
+        data: {
+          status: EventStatus.COMPLETED,
+        },
+      });
+    } catch (error) {
+      // Log lỗi nhưng không throw để không ảnh hưởng đến flow chính
+      console.error('Error updating multiple event statuses:', error);
+    }
   }
 }

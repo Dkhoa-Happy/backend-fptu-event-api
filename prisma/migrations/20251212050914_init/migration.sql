@@ -5,7 +5,7 @@ CREATE TYPE "UserRole" AS ENUM ('student', 'admin', 'staff', 'event_organizer');
 CREATE TYPE "UserStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
 -- CreateEnum
-CREATE TYPE "EventStatus" AS ENUM ('PENDING', 'PUBLISHED', 'CANCELED');
+CREATE TYPE "EventStatus" AS ENUM ('PENDING', 'PUBLISHED', 'CANCELED', 'COMPLETED');
 
 -- CreateEnum
 CREATE TYPE "TicketStatus" AS ENUM ('VALID', 'USED', 'CANCELLED', 'EXPIRED');
