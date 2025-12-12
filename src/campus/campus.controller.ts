@@ -81,4 +81,14 @@ export class CampusController {
   deleteCampusById(@Param('id') id: string) {
     return this.campusService.deleteCampusById(parseInt(id));
   }
+
+  @Patch(':id/activate')
+  @Roles(UserRole.admin)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Kích hoạt lại campus (set status thành Active) (admin only)',
+  })
+  activateCampus(@Param('id') id: string) {
+    return this.campusService.activateCampus(parseInt(id));
+  }
 }

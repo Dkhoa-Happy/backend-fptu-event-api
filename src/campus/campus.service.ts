@@ -198,4 +198,30 @@ export class CampusService {
       throw new BadRequestException('Lỗi khi lấy venues');
     }
   }
+
+  async activateCampus(id: number) {
+    try {
+      const existingCampus = await this.prisma.campus.findUnique({
+        where: { id },
+      });
+      if (!existingCampus) {
+        throw new BadRequestException('Campus không tồn tại');
+      }
+      const response = await this.prisma.campus.update({
+        where: { id },
+        data: {
+          status: 'Active',
+        },
+      });
+      return { message: 'Kích hoạt campus thành công', campus: response };
+    } catch (error: unknown) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw new BadRequestException('Lỗi khi kích hoạt campus');
+    }
+  }
 }

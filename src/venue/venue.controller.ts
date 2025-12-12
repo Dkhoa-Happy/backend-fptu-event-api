@@ -74,4 +74,14 @@ export class VenueController {
   deleteVenueById(@Param('id') id: string) {
     return this.venueService.deleteVenueById(parseInt(id));
   }
+
+  @Patch(':id/activate')
+  @Roles(UserRole.admin)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Kích hoạt lại venue (set status thành Active) (admin only)',
+  })
+  activateVenue(@Param('id') id: string) {
+    return this.venueService.activateVenue(parseInt(id));
+  }
 }
