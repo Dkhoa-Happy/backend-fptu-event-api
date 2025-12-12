@@ -376,7 +376,9 @@ export class SpeakerService {
     // Check if event exists
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      include: {
+      select: {
+        id: true,
+        title: true,
         organizer: {
           select: {
             id: true,
@@ -397,22 +399,29 @@ export class SpeakerService {
         event.organizer.ownerId !== organizerUserId
       ) {
         throw new ForbiddenException(
-          'You do not have permission to remove speaker from this event',
+          'Bạn không có quyền gỡ speaker khỏi sự kiện này',
         );
       }
     }
 
-    // Check if EventSpeaker exists
+    // Check if EventSpeaker exists and get speaker info
     const eventSpeaker = await this.prisma.eventSpeaker.findFirst({
       where: {
         eventId: eventId,
         speakerId: speakerId,
       },
+      include: {
+        speaker: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
 
     if (!eventSpeaker) {
       throw new NotFoundException(
-        `Speaker with ID ${speakerId} is not assigned to event ${eventId}`,
+        `Speaker với ID ${speakerId} không được phân công cho sự kiện ${eventId}`,
       );
     }
 
@@ -422,7 +431,7 @@ export class SpeakerService {
       });
 
       return {
-        message: `Đã gỡ speaker ${speakerId} khỏi sự kiện ${eventId}`,
+        message: `Đã gỡ speaker "${eventSpeaker.speaker.name}" khỏi sự kiện "${event.title}"`,
       };
     } catch (error: unknown) {
       if (

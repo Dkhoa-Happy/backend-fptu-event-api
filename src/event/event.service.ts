@@ -1411,48 +1411,6 @@ export class EventService {
     }
   }
 
-  async remove(id: string) {
-    // Check if event exists
-    const event = await this.prisma.event.findUnique({
-      where: { id },
-    });
-
-    if (!event) {
-      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
-    }
-
-    try {
-      await this.prisma.event.delete({
-        where: { id },
-      });
-
-      return { message: `Đã xóa sự kiện với ID ${id} thành công` };
-    } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code: string }).code === 'P2025'
-      ) {
-        throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
-      }
-
-      // Handle foreign key constraint errors
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code: string }).code === 'P2003'
-      ) {
-        throw new BadRequestException(
-          'Không thể xóa sự kiện vì nó đang được tham chiếu bởi các bản ghi khác (ví dụ: vé, phản hồi)',
-        );
-      }
-
-      throw error;
-    }
-  }
-
   async findAssignedEvents(staffId: number, query: QueryEventDto) {
     const {
       page = 1,

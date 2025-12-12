@@ -52,7 +52,7 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Không tìm thấy user');
     }
 
     return {
@@ -110,7 +110,7 @@ export class UserService {
         (error as { code: string }).code === 'P2002'
       ) {
         throw new ConflictException(
-          'Email, username or student code already in use',
+          'Email, username hoặc mã sinh viên đã được sử dụng',
         );
       }
       throw error;
@@ -231,7 +231,7 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('Không tìm thấy user');
     }
 
     return user;
@@ -259,7 +259,7 @@ export class UserService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException('User not found');
+        throw new NotFoundException('Không tìm thấy user');
       }
 
       if (
@@ -269,7 +269,7 @@ export class UserService {
         (error as { code: string }).code === 'P2002'
       ) {
         throw new ConflictException(
-          'Email, username or student code already in use',
+          'Email, username hoặc mã sinh viên đã được sử dụng',
         );
       }
 
@@ -292,7 +292,7 @@ export class UserService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException('User not found');
+        throw new NotFoundException('Không tìm thấy user');
       }
 
       throw error;
@@ -314,7 +314,7 @@ export class UserService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException('User not found');
+        throw new NotFoundException('Không tìm thấy user');
       }
 
       throw error;
@@ -414,19 +414,19 @@ export class UserService {
       });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        throw new NotFoundException('Không tìm thấy user');
       }
 
       if (user.status !== UserStatus.PENDING) {
         throw new ConflictException(
-          `User status is ${user.status}, only PENDING users can be approved/rejected`,
+          `Trạng thái user là ${user.status}, chỉ user PENDING mới có thể được phê duyệt/từ chối`,
         );
       }
 
       const reason = dto.reason?.trim();
       if (dto.status === UserStatus.REJECTED && !reason) {
         throw new ConflictException(
-          'Reason is required when rejecting a user account',
+          'Lý do là bắt buộc khi từ chối tài khoản user',
         );
       }
 
@@ -470,7 +470,7 @@ export class UserService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException('User not found');
+        throw new NotFoundException('Không tìm thấy user');
       }
 
       throw error;

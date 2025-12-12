@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVenueDto, UpdateVenueDto } from './dto';
+import { EventStatus } from '@prisma/client';
 
 @Injectable()
 export class VenueService {
@@ -200,6 +201,44 @@ export class VenueService {
       if (!existingVenue) {
         throw new BadRequestException('Venue không tồn tại');
       }
+
+      // Kiểm tra xem venue có đang được sử dụng bởi các event đang diễn ra không
+      const now = new Date();
+      const activeEvents = await this.prisma.event.findMany({
+        where: {
+          venueId: id,
+          status: {
+            in: [EventStatus.PENDING, EventStatus.PUBLISHED],
+          },
+          // Kiểm tra event đang diễn ra hoặc sắp diễn ra
+          OR: [
+            {
+              // Event đang diễn ra (đã bắt đầu nhưng chưa kết thúc)
+              startTime: { lte: now },
+              endTime: { gte: now },
+            },
+            {
+              // Event sắp diễn ra (chưa bắt đầu)
+              startTime: { gt: now },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+        },
+      });
+
+      if (activeEvents.length > 0) {
+        const eventTitles = activeEvents.map((e) => `"${e.title}"`).join(', ');
+        throw new BadRequestException(
+          `Không thể xóa venue này vì có ${activeEvents.length} sự kiện đang sử dụng venue này: ${eventTitles}. Vui lòng hủy hoặc hoàn thành các sự kiện trước khi xóa venue.`,
+        );
+      }
+
       const response = await this.prisma.venue.update({
         where: { id },
         data: {
