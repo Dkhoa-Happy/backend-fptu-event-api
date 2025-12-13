@@ -105,27 +105,78 @@ export class UserSeeder implements Seeder {
       },
     });
 
-    // Student account
-    await prisma.user.upsert({
-      where: { email: 'student@example.com' },
-      update: { status: UserStatus.APPROVED },
-      create: {
+    // Student accounts with student codes
+    const studentAccounts = [
+      {
         email: 'student@example.com',
         userName: 'student1',
-        passwordHash,
         firstName: 'Student',
         lastName: 'Account',
-        avatar:
-          'https://i.pinimg.com/1200x/5e/41/51/5e415107901e7b8e1dc74b39a829c215.jpg',
+        studentCode: 'SE182689',
         phoneNumber: '0900000003',
-        address: 'FPT University - Hồ Chí Minh',
         gender: false, // female
-        roleName: 'student',
-        campusId: campus.id,
-        isActive: true,
-        status: UserStatus.APPROVED,
       },
-    });
+      {
+        email: 'student2@example.com',
+        userName: 'student2',
+        firstName: 'Nguyễn',
+        lastName: 'Văn A',
+        studentCode: 'SE182690',
+        phoneNumber: '0900000006',
+        gender: true, // male
+      },
+      {
+        email: 'student3@example.com',
+        userName: 'student3',
+        firstName: 'Trần',
+        lastName: 'Thị B',
+        studentCode: 'SE182691',
+        phoneNumber: '0900000007',
+        gender: false, // female
+      },
+      {
+        email: 'student4@example.com',
+        userName: 'student4',
+        firstName: 'Lê',
+        lastName: 'Văn C',
+        studentCode: 'SE182692',
+        phoneNumber: '0900000008',
+        gender: true, // male
+      },
+      {
+        email: 'student5@example.com',
+        userName: 'student5',
+        firstName: 'Phạm',
+        lastName: 'Thị D',
+        studentCode: 'SE182693',
+        phoneNumber: '0900000009',
+        gender: false, // female
+      },
+    ];
+
+    for (const student of studentAccounts) {
+      await prisma.user.upsert({
+        where: { email: student.email },
+        update: { status: UserStatus.APPROVED },
+        create: {
+          email: student.email,
+          userName: student.userName,
+          passwordHash,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          studentCode: student.studentCode,
+          avatar:
+            'https://i.pinimg.com/1200x/5e/41/51/5e415107901e7b8e1dc74b39a829c215.jpg',
+          phoneNumber: student.phoneNumber,
+          address: 'FPT University - Hồ Chí Minh',
+          gender: student.gender,
+          roleName: 'student',
+          campusId: campus.id,
+          isActive: true,
+          status: UserStatus.APPROVED,
+        },
+      });
+    }
     // Admin account
     await prisma.user.upsert({
       where: { email: 'admin@example.com' },

@@ -23,6 +23,7 @@ import {
   QueryTicketDto,
   QueryMyTicketDto,
   ScanTicketDto,
+  ManualCheckinDto,
   QueryEventAttendeesDto,
 } from './dto';
 import { JwtGuard, RolesGuard } from '../auth/guard';
@@ -174,6 +175,41 @@ export class TicketController {
     return this.ticketService.scanTicket(dto.qrCode, dto.staffId);
   }
 
+  @Post('manual-checkin')
+  @Roles(UserRole.staff)
+  @ApiOperation({
+    summary: 'Manual check-in ticket - Required roles: staff',
+    description:
+      'Perform manual check-in when QR code scanning is not possible. Can use ticketId or (userId + eventId) to find the ticket. Updates ticket status to USED if valid. Uses transaction to ensure data consistency.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Manual check-in successful',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        ticket: { type: 'object', nullable: true },
+        user: { type: 'object', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request (e.g., missing required fields, ticket already used/cancelled/expired)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Ticket or Staff not found',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: staff',
+  })
+  async manualCheckin(@Body() dto: ManualCheckinDto) {
+    return this.ticketService.manualCheckin(dto);
+  }
+
   @Get(':id')
   @Roles(UserRole.admin, UserRole.staff, UserRole.student)
   @ApiOperation({
@@ -216,6 +252,36 @@ export class TicketController {
   })
   async update(@Param('id') id: string, @Body() dto: UpdateTicketDto) {
     return this.ticketService.update(id, dto);
+  }
+
+  @Post(':id/cancel')
+  @Roles(UserRole.student)
+  @ApiOperation({
+    summary:
+      'Cancel ticket - Required roles: student',
+    description:
+      'Cancel a ticket. Only allowed if the event starts more than 1 day from now. The seat will be freed and event registeredCount will be decremented.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ticket cancelled successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Ticket not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request (e.g., cannot cancel, ticket already cancelled/used)',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: student',
+  })
+  async cancel(
+    @Param('id') id: string,
+    @GetUser('id') userId: number,
+  ) {
+    return this.ticketService.cancel(id, userId);
   }
 
   @Delete(':id')

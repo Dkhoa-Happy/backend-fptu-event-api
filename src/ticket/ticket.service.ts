@@ -14,6 +14,7 @@ import {
   QueryTicketDto,
   QueryMyTicketDto,
   QueryEventAttendeesDto,
+  ManualCheckinDto,
 } from './dto';
 import { TicketStatus } from '@prisma/client';
 
@@ -122,7 +123,19 @@ export class TicketService {
     });
 
     if (existingTicket) {
-      throw new BadRequestException('User đã đăng ký sự kiện này');
+      if (existingTicket.status === 'CANCELLED') {
+        throw new BadRequestException(
+          'Bạn đã hủy vé cho sự kiện này trước đó. Vui lòng liên hệ admin nếu muốn đăng ký lại.',
+        );
+      }
+      if (existingTicket.status === 'EXPIRED') {
+        throw new BadRequestException(
+          'Bạn đã có vé cho sự kiện này nhưng đã hết hạn. Vui lòng liên hệ admin nếu muốn đăng ký lại.',
+        );
+      }
+      throw new BadRequestException(
+        'Bạn đã đăng ký sự kiện này rồi. Mỗi người chỉ có thể đăng ký 1 lần cho mỗi sự kiện.',
+      );
     }
 
     // Check if seat exists and is active
@@ -156,13 +169,14 @@ export class TicketService {
       );
     }
 
-    // Check if seat is already booked for this event (check via Ticket, not isBooked)
+    // Check if seat is already booked for this event (only check VALID/USED tickets)
+    // CANCELLED/EXPIRED tickets will be handled in transaction to allow re-booking
     const existingSeatBooking = await this.prisma.ticket.findFirst({
       where: {
         eventId: dto.eventId,
         seatId: dto.seatId,
         status: {
-          notIn: ['CANCELLED', 'EXPIRED'], // Chỉ check các ticket còn hiệu lực
+          in: ['VALID', 'USED'], // Chỉ check các ticket còn hiệu lực hoặc đã dùng
         },
       },
     });
@@ -218,6 +232,58 @@ export class TicketService {
           );
         }
 
+        // Double-check user ticket within transaction to prevent race condition
+        const existingUserTicket = await tx.ticket.findFirst({
+          where: {
+            userId,
+            eventId: dto.eventId,
+          },
+        });
+
+        if (existingUserTicket) {
+          if (
+            existingUserTicket.status === 'VALID' ||
+            existingUserTicket.status === 'USED'
+          ) {
+            throw new BadRequestException(
+              'Bạn đã đăng ký sự kiện này rồi. Mỗi người chỉ có thể đăng ký 1 lần cho mỗi sự kiện.',
+            );
+          }
+          // If CANCELLED or EXPIRED, delete it to allow new booking
+          // Note: registeredCount was already decremented when ticket was cancelled/expired
+          await tx.ticket.delete({
+            where: { id: existingUserTicket.id },
+          });
+        }
+
+        // Double-check seat booking within transaction to prevent race condition
+        // Only check VALID/USED tickets, CANCELLED/EXPIRED will be deleted below
+        const existingSeatTicket = await tx.ticket.findFirst({
+          where: {
+            eventId: dto.eventId,
+            seatId: dto.seatId,
+            status: {
+              in: ['VALID', 'USED'],
+            },
+          },
+        });
+
+        if (existingSeatTicket) {
+          throw new BadRequestException('Ghế này đã được đặt cho sự kiện này');
+        }
+
+        // Delete any CANCELLED/EXPIRED tickets for this seat to allow re-booking
+        // This handles the case where someone cancelled/expired and someone else wants to book
+        await tx.ticket.deleteMany({
+          where: {
+            eventId: dto.eventId,
+            seatId: dto.seatId,
+            status: {
+              in: ['CANCELLED', 'EXPIRED'],
+            },
+          },
+        });
+
         // Create ticket
         const ticket = await tx.ticket.create({
           data: {
@@ -235,6 +301,7 @@ export class TicketService {
                 email: true,
                 firstName: true,
                 lastName: true,
+                studentCode: true,
               },
             },
             event: {
@@ -295,23 +362,39 @@ export class TicketService {
             ? (error.meta as { target?: string[] })
             : undefined;
 
+        const targetFields = meta?.target || [];
+
+        // Check for userId + eventId constraint violation
         if (
-          meta?.target &&
-          meta.target.includes('userId') &&
-          meta.target.includes('eventId')
+          targetFields.includes('userId') &&
+          targetFields.includes('eventId')
         ) {
-          throw new BadRequestException('User đã đăng ký sự kiện này rồi');
+          throw new BadRequestException(
+            'Bạn đã đăng ký sự kiện này rồi. Mỗi người chỉ có thể đăng ký 1 lần cho mỗi sự kiện.',
+          );
         }
 
+        // Check for eventId + seatId constraint violation
         if (
-          meta?.target &&
-          meta.target.includes('eventId') &&
-          meta.target.includes('seatId')
+          targetFields.includes('eventId') &&
+          targetFields.includes('seatId')
         ) {
-          throw new BadRequestException('Ghế này đã được chọn');
+          throw new BadRequestException(
+            'Ghế này đã được đặt cho sự kiện này. Vui lòng chọn ghế khác.',
+          );
         }
 
-        throw new BadRequestException('Vi phạm ràng buộc duy nhất');
+        // Check for qrCode constraint violation (shouldn't happen with UUID, but just in case)
+        if (targetFields.includes('qrCode')) {
+          throw new BadRequestException(
+            'Lỗi tạo mã QR. Vui lòng thử lại.',
+          );
+        }
+
+        // Generic unique constraint violation
+        throw new BadRequestException(
+          `Vi phạm ràng buộc duy nhất. Có thể bạn đã đăng ký sự kiện này hoặc ghế đã được chọn. Chi tiết: ${JSON.stringify(targetFields)}`,
+        );
       }
 
       if (
@@ -745,6 +828,138 @@ export class TicketService {
     }
   }
 
+  async cancel(id: string, userId: number) {
+    // Check if ticket exists and belongs to user
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+          },
+        },
+        seat: {
+          select: {
+            id: true,
+            isBooked: true,
+          },
+        },
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException(`Không tìm thấy vé với ID ${id}`);
+    }
+
+    // Check if ticket belongs to the user
+    if (ticket.userId !== userId) {
+      throw new ForbiddenException(
+        'Bạn không có quyền hủy vé này. Vé này không thuộc về bạn.',
+      );
+    }
+
+    // Check if ticket is already cancelled, used, or expired
+    if (ticket.status === 'CANCELLED') {
+      throw new BadRequestException('Vé này đã bị hủy rồi');
+    }
+
+    if (ticket.status === 'USED') {
+      throw new BadRequestException('Vé này đã được sử dụng, không thể hủy');
+    }
+
+    if (ticket.status === 'EXPIRED') {
+      throw new BadRequestException('Vé này đã hết hạn, không thể hủy');
+    }
+
+    // Check if cancellation is allowed (at least 1 day before event start)
+    const now = new Date();
+    const eventStartTime = new Date(ticket.event.startTime);
+    const oneDayInMs = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+    const timeUntilEvent = eventStartTime.getTime() - now.getTime();
+
+    if (timeUntilEvent <= oneDayInMs) {
+      throw new BadRequestException(
+        `Không thể hủy vé. Chỉ có thể hủy vé trước khi sự kiện diễn ra ít nhất 1 ngày. Sự kiện bắt đầu lúc ${eventStartTime.toISOString()}`,
+      );
+    }
+
+    // Use transaction to ensure data consistency
+    return await this.prisma.$transaction(async (tx) => {
+      // Update ticket status to CANCELLED
+      const updatedTicket = await tx.ticket.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          event: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              startTime: true,
+              endTime: true,
+              status: true,
+              bannerUrl: true,
+              venue: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                },
+              },
+            },
+          },
+          seat: {
+            select: {
+              id: true,
+              rowLabel: true,
+              colLabel: true,
+              seatType: true,
+              isBooked: true,
+            },
+          },
+        },
+      });
+
+      // Free the seat (set isBooked to false) if seat exists
+      if (ticket.seatId) {
+        await tx.seat.update({
+          where: { id: ticket.seatId },
+          data: {
+            isBooked: false,
+          },
+        });
+      }
+
+      // Decrement registeredCount of the event
+      await tx.event.update({
+        where: { id: ticket.eventId },
+        data: {
+          registeredCount: {
+            decrement: 1,
+          },
+        },
+      });
+
+      return {
+        message: 'Vé đã được hủy thành công',
+        ticket: updatedTicket,
+      };
+    });
+  }
+
   async remove(id: string) {
     // Check if ticket exists
     const ticket = await this.prisma.ticket.findUnique({
@@ -920,6 +1135,7 @@ export class TicketService {
                 email: true,
                 firstName: true,
                 lastName: true,
+                studentCode: true,
               },
             },
             event: {
@@ -954,6 +1170,238 @@ export class TicketService {
         return {
           success: true,
           message: 'Check-in thành công',
+          ticket: updatedTicket,
+          user: updatedTicket.user,
+        };
+      }
+
+      return {
+        success: false,
+        message: `Trạng thái vé không xác định: ${String(ticket.status)}`,
+        ticket: null,
+      };
+    });
+  }
+
+  async manualCheckin(dto: ManualCheckinDto) {
+    const { ticketId, studentCode, eventId, staffId } = dto;
+
+    // Validate input: either ticketId or (studentCode + eventId) must be provided
+    if (!ticketId && (!studentCode || !eventId)) {
+      throw new BadRequestException(
+        'Vui lòng cung cấp ticketId hoặc (studentCode + eventId) để check-in',
+      );
+    }
+
+    // Validate that staff exists
+    const staff = await this.prisma.user.findUnique({
+      where: { id: staffId },
+    });
+
+    if (!staff) {
+      throw new NotFoundException(`Không tìm thấy staff với ID ${staffId}`);
+    }
+
+    // Use transaction to ensure data consistency
+    return await this.prisma.$transaction(async (tx) => {
+      // Find ticket by ticketId or studentCode + eventId
+      let ticket;
+      if (ticketId) {
+        ticket = await tx.ticket.findUnique({
+          where: { id: ticketId },
+          include: {
+            user: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                studentCode: true,
+              },
+            },
+            event: {
+              select: {
+                id: true,
+                title: true,
+                startTime: true,
+                endTime: true,
+                bannerUrl: true,
+                venue: {
+                  select: {
+                    id: true,
+                    name: true,
+                    location: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+      } else if (studentCode && eventId) {
+        // First, find user by studentCode
+        const user = await tx.user.findUnique({
+          where: { studentCode },
+          select: { id: true },
+        });
+
+        if (!user) {
+          throw new NotFoundException(
+            `Không tìm thấy user với student code ${studentCode}`,
+          );
+        }
+
+        // Then find ticket by userId + eventId
+        ticket = await tx.ticket.findFirst({
+          where: {
+            userId: user.id,
+            eventId,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                studentCode: true,
+              },
+            },
+            event: {
+              select: {
+                id: true,
+                title: true,
+                startTime: true,
+                endTime: true,
+                bannerUrl: true,
+                venue: {
+                  select: {
+                    id: true,
+                    name: true,
+                    location: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      if (!ticket) {
+        if (ticketId) {
+          throw new NotFoundException(
+            `Không tìm thấy vé với ID ${ticketId}`,
+          );
+        } else {
+          throw new NotFoundException(
+            `Không tìm thấy vé cho student code ${studentCode} và event ID ${eventId}`,
+          );
+        }
+      }
+
+      // Check if staff is assigned to this event
+      const eventStaff = await tx.eventStaff.findFirst({
+        where: {
+          eventId: ticket.eventId,
+          userId: staffId,
+        },
+      });
+
+      if (!eventStaff) {
+        throw new ForbiddenException(
+          'Bạn không được phân công cho sự kiện này. Chỉ staff được phân công mới có thể check-in cho sự kiện này.',
+        );
+      }
+
+      // Check if ticket is expired (event has ended)
+      const now = new Date();
+      if (new Date(ticket.event.endTime) < now && ticket.status === 'VALID') {
+        // Auto-update expired ticket
+        await tx.ticket.update({
+          where: { id: ticket.id },
+          data: { status: 'EXPIRED' },
+        });
+        ticket.status = 'EXPIRED';
+      }
+
+      // Check ticket status
+      if (ticket.status === 'USED') {
+        return {
+          success: false,
+          message: 'Vé đã được sử dụng',
+          ticket: null,
+        };
+      }
+
+      if (ticket.status === 'CANCELLED') {
+        return {
+          success: false,
+          message: 'Vé đã bị hủy',
+          ticket: null,
+        };
+      }
+
+      if (ticket.status === 'EXPIRED') {
+        return {
+          success: false,
+          message: 'Vé đã hết hạn. Sự kiện đã kết thúc.',
+          ticket: null,
+        };
+      }
+
+      // Ticket is VALID - proceed with check-in
+      if (ticket.status === 'VALID') {
+        // Update ticket status to USED
+        const updatedTicket = await tx.ticket.update({
+          where: { id: ticket.id },
+          data: {
+            status: 'USED',
+            checkinTime: new Date(),
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                studentCode: true,
+              },
+            },
+            event: {
+              select: {
+                id: true,
+                title: true,
+                startTime: true,
+                endTime: true,
+                bannerUrl: true,
+                venue: {
+                  select: {
+                    id: true,
+                    name: true,
+                    location: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        // Publish realtime check-in event to event room
+        this.checkinGateway.broadcastCheckin(ticket.eventId, {
+          ticketId: updatedTicket.id,
+          eventId: updatedTicket.eventId,
+          user: updatedTicket.user,
+          status: updatedTicket.status,
+          checkinTime: updatedTicket.checkinTime,
+          handledBy: staffId,
+        });
+
+        return {
+          success: true,
+          message: 'Check-in thủ công thành công',
           ticket: updatedTicket,
           user: updatedTicket.user,
         };
