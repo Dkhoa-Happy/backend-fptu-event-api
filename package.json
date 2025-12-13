@@ -37,6 +37,7 @@
     "@onesignal/node-onesignal": "^5.3.1-beta1",
     "@prisma/adapter-pg": "^7.0.1",
     "@prisma/client": "^7.1.0",
+    "@sendgrid/mail": "^8.1.6",
     "@types/argon2": "^0.14.1",
     "@types/passport-google-oauth20": "^2.0.17",
     "argon2": "^0.44.0",

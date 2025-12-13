@@ -46,14 +46,14 @@ export class AuthService {
 
     if (!campus) {
       throw new BadRequestException(
-        `Campus with ID ${campusId} does not exist`,
+        `Không tìm thấy campus với ID ${campusId}`,
       );
     }
 
     // Bắt buộc cung cấp hình thẻ sinh viên cho mọi tài khoản đăng ký
     if (!studentCardImage) {
       throw new BadRequestException(
-        'Student card image is required for account registration',
+        'Ảnh thẻ sinh viên là bắt buộc để đăng ký tài khoản',
       );
     }
 
@@ -105,7 +105,7 @@ export class AuthService {
       ) {
         // Prisma unique constraint violation (email, userName, studentCode, ...)
         throw new ConflictException(
-          'Email, username or student code already in use',
+          'Email, username hoặc mã sinh viên đã được sử dụng',
         );
       }
       throw error;
@@ -116,18 +116,18 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
     // Kiểm tra status - chỉ cho phép APPROVED users đăng nhập
     if (user.status !== UserStatus.APPROVED) {
       if (user.status === UserStatus.PENDING) {
         throw new UnauthorizedException(
-          'Your account is pending approval. Please wait for admin review.',
+          'Tài khoản của bạn đang chờ phê duyệt. Vui lòng đợi admin xem xét.',
         );
       } else if (user.status === UserStatus.REJECTED) {
         throw new UnauthorizedException(
-          'Your account has been rejected. Please contact administrator.',
+          'Tài khoản của bạn đã bị từ chối. Vui lòng liên hệ quản trị viên.',
         );
       }
     }
@@ -135,18 +135,18 @@ export class AuthService {
     // User đăng nhập bằng Google không có passwordHash
     if (!user.passwordHash) {
       throw new UnauthorizedException(
-        'This account uses Google login. Please use Google to sign in.',
+        'Tài khoản này sử dụng đăng nhập Google. Vui lòng sử dụng Google để đăng nhập.',
       );
     }
 
     try {
       const isValidPassword = await argon2.verify(user.passwordHash, password);
       if (!isValidPassword) {
-        throw new UnauthorizedException('Invalid email or password');
+        throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
       }
     } catch {
       // Trường hợp password trong DB không phải hash Argon2 (user cũ)
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
     const tokens = await this.getTokens(user.id, user.email, user.roleName);
@@ -221,7 +221,7 @@ export class AuthService {
 
       if (!defaultCampus) {
         throw new UnauthorizedException(
-          'No active campus found. Please contact administrator.',
+          'Không tìm thấy campus đang hoạt động. Vui lòng liên hệ quản trị viên.',
         );
       }
 
@@ -261,7 +261,7 @@ export class AuthService {
       });
 
       throw new UnauthorizedException(
-        'Your account has been created but is pending approval. Please wait for admin review.',
+        'Tài khoản của bạn đã được tạo nhưng đang chờ phê duyệt. Vui lòng đợi admin xem xét.',
       );
     }
 
@@ -322,18 +322,18 @@ export class AuthService {
       });
 
       if (!user || !user.refreshTokenHash) {
-        throw new UnauthorizedException('Invalid refresh token');
+        throw new UnauthorizedException('Refresh token không hợp lệ');
       }
 
       const isValid = await argon2.verify(user.refreshTokenHash, refreshToken);
 
       if (!isValid) {
-        throw new UnauthorizedException('Invalid refresh token');
+        throw new UnauthorizedException('Refresh token không hợp lệ');
       }
 
       // Chỉ cho phép APPROVED user
       if (user.status !== UserStatus.APPROVED) {
-        throw new UnauthorizedException('User is not approved');
+        throw new UnauthorizedException('User chưa được phê duyệt');
       }
 
       const tokens = await this.getTokens(user.id, user.email, user.roleName);

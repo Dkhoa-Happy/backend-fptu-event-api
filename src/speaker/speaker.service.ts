@@ -37,7 +37,7 @@ export class SpeakerService {
         'code' in error &&
         (error as { code: string }).code === 'P2002'
       ) {
-        throw new BadRequestException('Speaker with this name already exists');
+        throw new BadRequestException('Speaker với tên này đã tồn tại');
       }
       throw error;
     }
@@ -103,7 +103,7 @@ export class SpeakerService {
     });
 
     if (!speaker) {
-      throw new NotFoundException(`Speaker with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy speaker với ID ${id}`);
     }
 
     return speaker;
@@ -115,7 +115,7 @@ export class SpeakerService {
     });
 
     if (!existingSpeaker) {
-      throw new NotFoundException(`Speaker with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy speaker với ID ${id}`);
     }
 
     try {
@@ -140,7 +140,7 @@ export class SpeakerService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException(`Speaker with ID ${id} not found`);
+        throw new NotFoundException(`Không tìm thấy speaker với ID ${id}`);
       }
 
       if (
@@ -149,7 +149,7 @@ export class SpeakerService {
         'code' in error &&
         (error as { code: string }).code === 'P2002'
       ) {
-        throw new BadRequestException('Speaker with this name already exists');
+        throw new BadRequestException('Speaker với tên này đã tồn tại');
       }
 
       throw error;
@@ -162,7 +162,7 @@ export class SpeakerService {
     });
 
     if (!speaker) {
-      throw new NotFoundException(`Speaker with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy speaker với ID ${id}`);
     }
 
     try {
@@ -170,7 +170,7 @@ export class SpeakerService {
         where: { id },
       });
 
-      return { message: `Speaker with ID ${id} has been deleted successfully` };
+      return { message: `Đã xóa speaker với ID ${id} thành công` };
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -178,7 +178,7 @@ export class SpeakerService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException(`Speaker with ID ${id} not found`);
+        throw new NotFoundException(`Không tìm thấy speaker với ID ${id}`);
       }
 
       if (
@@ -188,7 +188,7 @@ export class SpeakerService {
         (error as { code: string }).code === 'P2003'
       ) {
         throw new BadRequestException(
-          'Cannot delete speaker because it is referenced by events',
+          'Không thể xóa speaker vì nó đang được tham chiếu bởi các sự kiện',
         );
       }
 
@@ -220,7 +220,7 @@ export class SpeakerService {
     });
 
     if (!event) {
-      throw new NotFoundException(`Event with ID ${eventId} not found`);
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${eventId}`);
     }
 
     // Check permission: admin can assign to any event, event_organizer only to their own events
@@ -241,7 +241,7 @@ export class SpeakerService {
     });
 
     if (!speaker) {
-      throw new NotFoundException(`Speaker with ID ${dto.speakerId} not found`);
+      throw new NotFoundException(`Không tìm thấy speaker với ID ${dto.speakerId}`);
     }
 
     // Check if speaker is already assigned to this event
@@ -361,7 +361,7 @@ export class SpeakerService {
         'code' in error &&
         (error as { code: string }).code === 'P2003'
       ) {
-        throw new NotFoundException('Event or Speaker not found');
+        throw new NotFoundException('Không tìm thấy sự kiện hoặc speaker');
       }
 
       throw error;
@@ -376,7 +376,9 @@ export class SpeakerService {
     // Check if event exists
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      include: {
+      select: {
+        id: true,
+        title: true,
         organizer: {
           select: {
             id: true,
@@ -387,7 +389,7 @@ export class SpeakerService {
     });
 
     if (!event) {
-      throw new NotFoundException(`Event with ID ${eventId} not found`);
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${eventId}`);
     }
 
     // Check permission: admin can remove from any event, event_organizer only from their own events
@@ -397,22 +399,29 @@ export class SpeakerService {
         event.organizer.ownerId !== organizerUserId
       ) {
         throw new ForbiddenException(
-          'You do not have permission to remove speaker from this event',
+          'Bạn không có quyền gỡ speaker khỏi sự kiện này',
         );
       }
     }
 
-    // Check if EventSpeaker exists
+    // Check if EventSpeaker exists and get speaker info
     const eventSpeaker = await this.prisma.eventSpeaker.findFirst({
       where: {
         eventId: eventId,
         speakerId: speakerId,
       },
+      include: {
+        speaker: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
 
     if (!eventSpeaker) {
       throw new NotFoundException(
-        `Speaker with ID ${speakerId} is not assigned to event ${eventId}`,
+        `Speaker với ID ${speakerId} không được phân công cho sự kiện ${eventId}`,
       );
     }
 
@@ -422,7 +431,7 @@ export class SpeakerService {
       });
 
       return {
-        message: `Speaker ${speakerId} has been removed from event ${eventId}`,
+        message: `Đã gỡ speaker "${eventSpeaker.speaker.name}" khỏi sự kiện "${event.title}"`,
       };
     } catch (error: unknown) {
       if (
@@ -431,7 +440,7 @@ export class SpeakerService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException('EventSpeaker not found');
+        throw new NotFoundException('Không tìm thấy EventSpeaker');
       }
 
       throw error;
@@ -445,7 +454,7 @@ export class SpeakerService {
     });
 
     if (!event) {
-      throw new NotFoundException(`Event with ID ${eventId} not found`);
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${eventId}`);
     }
 
     const eventSpeakers = await this.prisma.eventSpeaker.findMany({

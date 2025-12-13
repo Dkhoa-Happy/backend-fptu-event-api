@@ -127,11 +127,7 @@ export class EventController {
   }
 
   @Get('stats/monthly')
-  @Roles(
-    UserRole.admin,
-    UserRole.staff,
-    UserRole.event_organizer,
-  )
+  @Roles(UserRole.admin, UserRole.staff, UserRole.event_organizer)
   @ApiOperation({
     summary:
       'Thống kê số lượng sự kiện theo tháng - Required roles: admin, staff, event_organizer',
@@ -143,8 +139,7 @@ export class EventController {
     description: 'Thống kê số lượng sự kiện theo tháng',
   })
   @ApiForbiddenResponse({
-    description:
-      'Forbidden. Required roles: admin, staff, event_organizer',
+    description: 'Forbidden. Required roles: admin, staff, event_organizer',
   })
   async getEventStatsByMonth(@Query() query: QueryEventStatsDto) {
     return this.eventService.getEventStatsByMonth(query);
@@ -311,14 +306,16 @@ export class EventController {
     return this.eventService.updateEventStatus(id, dto);
   }
 
-  @Delete(':id')
+  @Post(':id/cancel')
   @Roles(UserRole.admin, UserRole.event_organizer)
   @ApiOperation({
-    summary: 'Delete event by ID - Required roles: admin, event_organizer',
+    summary: 'Cancel published event - Required roles: admin, event_organizer',
+    description:
+      'Cancel a published event when there are issues or need to reschedule. Admin can cancel any event. Event organizer can only cancel events from their own organizers. When event is cancelled, all tickets will be marked as CANCELLED.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Event deleted successfully',
+    description: 'Event cancelled successfully',
   })
   @ApiResponse({
     status: 404,
@@ -326,12 +323,17 @@ export class EventController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Cannot delete event (referenced by other records)',
+    description:
+      'Bad request (e.g., event is already cancelled/completed, cannot cancel)',
   })
   @ApiForbiddenResponse({
-    description: 'Forbidden. Required roles: admin, event_organizer',
+    description:
+      'Forbidden. Required roles: admin, event_organizer. Or you do not own this event organizer.',
   })
-  async remove(@Param('id') id: string) {
-    return this.eventService.remove(id);
+  async cancelEvent(@Param('id') id: string, @GetUser() user: any) {
+    return this.eventService.cancelEvent(id, {
+      userId: user.id,
+      roleName: user.roleName,
+    });
   }
 }

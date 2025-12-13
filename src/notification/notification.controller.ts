@@ -1,9 +1,4 @@
-import {
-  Body,
-  Controller,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { TestSendDto } from './dto/test-send.dto';
@@ -32,7 +27,12 @@ export class NotificationController {
   }
 
   @Post('subscriptions')
-  @Roles(UserRole.student, UserRole.staff, UserRole.admin, UserRole.event_organizer)
+  @Roles(
+    UserRole.student,
+    UserRole.staff,
+    UserRole.admin,
+    UserRole.event_organizer,
+  )
   @ApiOperation({
     summary: 'Register OneSignal subscription for current user',
     description:
@@ -45,5 +45,3 @@ export class NotificationController {
     return this.notificationService.createSubscription(userId, dto);
   }
 }
-
-
