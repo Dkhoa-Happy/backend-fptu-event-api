@@ -821,6 +821,15 @@ export class EventService {
                       lastName: true,
                       avatar: true,
                       roleName: true,
+                      isActive: true,
+                      campus: {
+                        select: {
+                          id: true,
+                          name: true,
+                          code: true,
+                          address: true,
+                        },
+                      },
                     },
                   },
                 },
@@ -926,6 +935,15 @@ export class EventService {
                       lastName: true,
                       avatar: true,
                       roleName: true,
+                      isActive: true,
+                      campus: {
+                        select: {
+                          id: true,
+                          name: true,
+                          code: true,
+                          address: true,
+                        },
+                      },
                     },
                   },
                 },
