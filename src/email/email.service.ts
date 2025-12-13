@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 import { UserStatus } from '@prisma/client';
 
 type SendMailOptions = {
@@ -11,45 +11,56 @@ type SendMailOptions = {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly transporter: nodemailer.Transporter | null;
-  private readonly from: string;
+  private readonly fromEmail: string;
+  private readonly fromName: string;
+  private readonly isConfigured: boolean;
 
   constructor() {
-    const host = process.env.SMTP_HOST;
-    const port = process.env.SMTP_PORT
-      ? Number(process.env.SMTP_PORT)
-      : undefined;
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
-    this.from = process.env.SMTP_FROM || 'no-reply@example.com';
+    const apiKey = process.env.SENDGRID_API_KEY;
+    this.fromEmail = process.env.SENDGRID_FROM_EMAIL || 'no-reply@example.com';
+    this.fromName = process.env.SENDGRID_FROM_NAME || 'FPT Event Team';
 
-    if (host && port && user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: port === 465,
-        auth: { user, pass },
-      });
+    if (apiKey) {
+      sgMail.setApiKey(apiKey);
+      this.isConfigured = true;
+      this.logger.log('SendGrid email service initialized successfully');
     } else {
       this.logger.warn(
-        'SMTP config missing; emails will be logged instead of sent. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM.',
+        'SENDGRID_API_KEY missing; emails will be logged instead of sent. Set SENDGRID_API_KEY, SENDGRID_FROM_EMAIL, SENDGRID_FROM_NAME.',
       );
-      this.transporter = null;
+      this.isConfigured = false;
     }
   }
 
   async send(options: SendMailOptions) {
-    if (!this.transporter) {
+    if (!this.isConfigured) {
       this.logger.log(
         `Email (mock): to=${options.to}, subject=${options.subject}\n${options.html}`,
       );
       return;
     }
 
-    await this.transporter.sendMail({
-      from: this.from,
-      ...options,
-    });
+    try {
+      const msg = {
+        to: options.to,
+        from: {
+          email: this.fromEmail,
+          name: this.fromName,
+        },
+        subject: options.subject,
+        html: options.html,
+      };
+
+      await sgMail.send(msg);
+      this.logger.log(`Email sent successfully to ${options.to}`);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send email to ${options.to}: ${error?.message || String(error)}`,
+      );
+      // Don't throw error to prevent breaking the flow, just log it
+      // If you want to throw, uncomment the line below
+      // throw error;
+    }
   }
 
   async sendUserApprovalEmail(params: {
@@ -177,9 +188,7 @@ export class EmailService {
       newStartTime &&
       oldStartTime.getTime() !== newStartTime.getTime();
     const hasEndTimeChange =
-      oldEndTime &&
-      newEndTime &&
-      oldEndTime.getTime() !== newEndTime.getTime();
+      oldEndTime && newEndTime && oldEndTime.getTime() !== newEndTime.getTime();
 
     let timeChangeDetails = '';
     if (hasStartTimeChange && hasEndTimeChange) {
