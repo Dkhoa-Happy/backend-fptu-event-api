@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsInt, IsOptional, Min, Max, IsUUID } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsOptional,
+  Min,
+  Max,
+  IsUUID,
+  IsBoolean,
+} from 'class-validator';
 
 export class CreateFeedbackDto {
   @ApiProperty({
@@ -28,4 +36,15 @@ export class CreateFeedbackDto {
   })
   @IsUUID('4')
   eventId: string;
+
+  @ApiProperty({
+    description:
+      'Bỏ qua kiểm tra thời gian sự kiện (true: không cần sự kiện sắp kết thúc, false: chỉ được feedback khi sự kiện sắp kết thúc hoặc đã kết thúc)',
+    example: false,
+    required: false,
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  skipTimeValidation?: boolean;
 }
