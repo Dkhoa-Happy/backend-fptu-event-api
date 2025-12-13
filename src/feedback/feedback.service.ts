@@ -21,18 +21,21 @@ export class FeedbackService {
         throw new NotFoundException('Sự kiện không tồn tại');
       }
 
-      const now = new Date();
-      const eventEndTime = new Date(event.endTime);
-      // Tính thời gian 30 phút trước khi sự kiện kết thúc
-      const thirtyMinutesBeforeEnd = new Date(
-        eventEndTime.getTime() - 30 * 60 * 1000,
-      );
-
-      // Kiểm tra: chỉ cho phép feedback khi sự kiện đã kết thúc hoặc sắp kết thúc (trong 30 phút cuối)
-      if (now < thirtyMinutesBeforeEnd) {
-        throw new BadRequestException(
-          'Chỉ có thể đánh giá sự kiện khi sự kiện sắp kết thúc hoặc đã kết thúc',
+      // Kiểm tra thời gian nếu không bỏ qua validation
+      if (!dto.skipTimeValidation) {
+        const now = new Date();
+        const eventEndTime = new Date(event.endTime);
+        // Tính thời gian 30 phút trước khi sự kiện kết thúc
+        const thirtyMinutesBeforeEnd = new Date(
+          eventEndTime.getTime() - 30 * 60 * 1000,
         );
+
+        // Kiểm tra: chỉ cho phép feedback khi sự kiện đã kết thúc hoặc sắp kết thúc (trong 30 phút cuối)
+        if (now < thirtyMinutesBeforeEnd) {
+          throw new BadRequestException(
+            'Chỉ có thể đánh giá sự kiện khi sự kiện sắp kết thúc hoặc đã kết thúc',
+          );
+        }
       }
 
       // Kiểm tra user đã tham gia sự kiện chưa (có ticket)
