@@ -9,6 +9,7 @@ import { EventStatus, TicketStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventSummaryService } from './event-summary.service';
 import { NotificationService } from '../notification/notification.service';
+import { EmailService } from '../email/email.service';
 import {
   CreateEventDto,
   UpdateEventDto,
@@ -24,6 +25,7 @@ export class EventService {
     private readonly prisma: PrismaService,
     private readonly eventSummaryService: EventSummaryService,
     private readonly notificationService: NotificationService,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(
@@ -1193,6 +1195,10 @@ export class EventService {
     }
 
     try {
+      // Store old times to detect changes
+      const oldStartTime = existingEvent.startTime;
+      const oldEndTime = existingEvent.endTime;
+
       const updateData: Prisma.EventUncheckedUpdateInput = {};
 
       if (dto.title !== undefined) updateData.title = dto.title;
@@ -1246,6 +1252,83 @@ export class EventService {
           },
         },
       });
+
+      // Check if startTime or endTime changed and send notifications
+      const newStartTime = event.startTime;
+      const newEndTime = event.endTime;
+      const hasStartTimeChange =
+        dto.startTime !== undefined &&
+        oldStartTime.getTime() !== newStartTime.getTime();
+      const hasEndTimeChange =
+        dto.endTime !== undefined &&
+        oldEndTime.getTime() !== newEndTime.getTime();
+
+      // Only send notifications if event is PUBLISHED and has registered users
+      if (
+        (hasStartTimeChange || hasEndTimeChange) &&
+        event.status === EventStatus.PUBLISHED
+      ) {
+        // Get all registered users (only VALID tickets)
+        const registeredUsers = await this.prisma.ticket.findMany({
+          where: {
+            eventId: id,
+            status: TicketStatus.VALID,
+          },
+          select: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+
+        if (registeredUsers.length > 0) {
+          // Send push notification
+          this.notificationService
+            .notifyEventTimeChangedToAttendees(
+              id,
+              event.title,
+              hasStartTimeChange,
+              hasEndTimeChange,
+            )
+            .catch((error) => {
+              console.error(
+                `Failed to send time change notification to attendees for event ${id}:`,
+                error,
+              );
+            });
+
+          // Send email to all registered users
+          const uniqueUsers = Array.from(
+            new Map(registeredUsers.map((t) => [t.user.id, t.user])).values(),
+          );
+
+          for (const user of uniqueUsers) {
+            this.emailService
+              .sendEventTimeChangeEmail({
+                email: user.email,
+                fullName:
+                  `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+                  'Bạn',
+                eventTitle: event.title,
+                oldStartTime: hasStartTimeChange ? oldStartTime : undefined,
+                newStartTime: hasStartTimeChange ? newStartTime : undefined,
+                oldEndTime: hasEndTimeChange ? oldEndTime : undefined,
+                newEndTime: hasEndTimeChange ? newEndTime : undefined,
+              })
+              .catch((error) => {
+                console.error(
+                  `Failed to send time change email to user ${user.id} (${user.email}):`,
+                  error,
+                );
+              });
+          }
+        }
+      }
 
       return event;
     } catch (error: unknown) {
@@ -1397,6 +1480,264 @@ export class EventService {
             ? 'Event approved and published successfully'
             : 'Event canceled successfully',
       };
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === 'P2025'
+      ) {
+        throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
+      }
+
+      throw error;
+    }
+  }
+
+  async cancelEvent(
+    id: string,
+    currentUser: { userId: number; roleName: string },
+  ) {
+    try {
+      // Get event with organizer info to check permissions
+      const event = await this.prisma.event.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          organizer: {
+            select: {
+              id: true,
+              ownerId: true,
+            },
+          },
+        },
+      });
+
+      if (!event) {
+        throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
+      }
+
+      // Check permissions
+      const isAdmin = currentUser.roleName === 'admin';
+      const isOrganizerOwner =
+        currentUser.roleName === 'event_organizer' &&
+        event.organizer.ownerId === currentUser.userId;
+
+      if (!isAdmin && !isOrganizerOwner) {
+        throw new ForbiddenException(
+          'Bạn không có quyền hủy sự kiện này. Chỉ admin hoặc chủ sở hữu organizer mới có thể hủy sự kiện.',
+        );
+      }
+
+      // Only allow canceling PUBLISHED events
+      if (event.status !== EventStatus.PUBLISHED) {
+        throw new BadRequestException(
+          `Không thể hủy sự kiện này. Chỉ có thể hủy sự kiện đã được PUBLISHED. Trạng thái hiện tại: ${event.status}`,
+        );
+      }
+
+      // Use transaction to ensure data consistency
+      return await this.prisma.$transaction(async (tx) => {
+        // Get all users who registered for this event (BEFORE cancelling tickets)
+        // to send notifications and emails
+        const registeredUsers = await tx.ticket.findMany({
+          where: {
+            eventId: id,
+            status: TicketStatus.VALID, // Only get valid tickets
+          },
+          select: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+
+        // Get event details for email/notification
+        const eventDetails = await tx.event.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            title: true,
+            startTime: true,
+            endTime: true,
+          },
+        });
+
+        // Update event status to CANCELED
+        const updatedEvent = await tx.event.update({
+          where: { id },
+          data: {
+            status: EventStatus.CANCELED,
+          },
+          include: {
+            organizer: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                contactEmail: true,
+                logoUrl: true,
+              },
+            },
+            venue: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
+                hasSeats: true,
+                campusId: true,
+                campus: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    address: true,
+                  },
+                },
+              },
+            },
+            host: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        });
+
+        // Cancel all tickets for this event (only VALID tickets)
+        const cancelledTickets = await tx.ticket.updateMany({
+          where: {
+            eventId: id,
+            status: TicketStatus.VALID, // Only cancel valid tickets
+          },
+          data: {
+            status: TicketStatus.CANCELLED,
+          },
+        });
+
+        // Free all seats that were booked for this event
+        // Get all tickets with seats for this event
+        const ticketsWithSeats = await tx.ticket.findMany({
+          where: {
+            eventId: id,
+            seatId: { not: null },
+          },
+          select: {
+            seatId: true,
+          },
+        });
+
+        // Get unique seat IDs
+        const seatIds = [
+          ...new Set(
+            ticketsWithSeats
+              .map((t) => t.seatId)
+              .filter((id): id is number => id !== null),
+          ),
+        ];
+
+        // Free all seats
+        if (seatIds.length > 0) {
+          await tx.seat.updateMany({
+            where: {
+              id: { in: seatIds },
+            },
+            data: {
+              isBooked: false,
+            },
+          });
+        }
+
+        // Remove all staff assignments for this event
+        const removedStaff = await tx.eventStaff.deleteMany({
+          where: {
+            eventId: id,
+          },
+        });
+
+        // Remove all speaker assignments for this event
+        const removedSpeakers = await tx.eventSpeaker.deleteMany({
+          where: {
+            eventId: id,
+          },
+        });
+
+        // Note: registeredCount is not decremented because we want to keep the record
+        // of how many people registered before cancellation
+
+        // Send notification to organizer
+        if (event.organizer.ownerId) {
+          this.notificationService
+            .notifyEventStatusChange(
+              event.organizer.ownerId,
+              {
+                id: updatedEvent.id,
+                title: updatedEvent.title,
+                status: EventStatus.CANCELED,
+              },
+              EventStatus.CANCELED,
+            )
+            .catch((error) => {
+              console.error(
+                `Failed to send notification to organizer ${event.organizer.ownerId}:`,
+                error,
+              );
+            });
+        }
+
+        // Send notification to all registered users via OneSignal
+        this.notificationService
+          .notifyEventCancelledToAttendees(id, updatedEvent.title)
+          .catch((error) => {
+            console.error(
+              `Failed to send cancellation notification to attendees for event ${id}:`,
+              error,
+            );
+          });
+
+        // Send email to all registered users
+        const uniqueUsers = Array.from(
+          new Map(registeredUsers.map((t) => [t.user.id, t.user])).values(),
+        );
+
+        for (const user of uniqueUsers) {
+          this.emailService
+            .sendEventCancellationEmail({
+              email: user.email,
+              fullName:
+                `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
+                'Bạn',
+              eventTitle: eventDetails?.title || updatedEvent.title,
+              eventStartTime: eventDetails?.startTime,
+            })
+            .catch((error) => {
+              console.error(
+                `Failed to send cancellation email to user ${user.id} (${user.email}):`,
+                error,
+              );
+            });
+        }
+
+        return {
+          ...updatedEvent,
+          message: 'Sự kiện đã được hủy thành công',
+          cancelledTicketsCount: cancelledTickets.count,
+          freedSeatsCount: seatIds.length,
+          removedStaffCount: removedStaff.count,
+          removedSpeakersCount: removedSpeakers.count,
+        };
+      });
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&

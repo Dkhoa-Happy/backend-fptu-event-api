@@ -1,5 +1,19 @@
 # Thông báo sự kiện (OneSignal)
 
+## 📋 Tổng quan các Notification Types
+
+| Type | Mô tả | Gửi đến | Data Fields | Kèm Email |
+|------|-------|---------|-------------|-----------|
+| `staff_assigned` | Staff được assign vào event | Staff được assign | `eventId`, `startTime`, `endTime` | ❌ |
+| `event_created` | Event được tạo thành công | Organizer owner | `eventId`, `status` | ❌ |
+| `event_approved` | Event được admin approve | Organizer owner | `eventId`, `status` | ❌ |
+| `event_rejected` | Event bị admin reject | Organizer owner | `eventId`, `status` | ❌ |
+| `event_cancelled` | Event bị hủy (đã PUBLISHED) | Tất cả users đã đăng ký | `eventId`, `title` | ✅ |
+| `event_time_changed` | Thời gian event thay đổi | Tất cả users đã đăng ký | `eventId`, `title` | ✅ |
+| `one_day` | Event sắp diễn ra trong 1 ngày | Tất cả users (đã subscribe) | `eventId`, `startTime` | ❌ |
+| `thirty_min` | Event sắp diễn ra trong 30 phút | Tất cả users (đã subscribe) | `eventId`, `startTime` | ❌ |
+| `incident_reported` | Staff báo cáo sự cố | Admin + Organizer owner | `eventId`, `incidentId`, `severity`, `reporterName` | ❌ |
+
 ## Các loại thông báo
 
 Hệ thống hỗ trợ các loại thông báo sau:
@@ -40,6 +54,22 @@ Hệ thống hỗ trợ các loại thông báo sau:
 - **Gửi đến**: Organizer owner
 - **Type**: `event_rejected`
 - **Nội dung**: "Sự kiện của bạn đã bị từ chối"
+
+### 6. Thông báo khi sự kiện bị hủy
+
+- **Trigger**: Khi admin hoặc organizer hủy sự kiện đã PUBLISHED
+- **Gửi đến**: Tất cả users đã đăng ký sự kiện (có ticket VALID)
+- **Type**: `event_cancelled`
+- **Nội dung**: "Sự kiện [tên] đã bị hủy. Vé của bạn đã được tự động hủy."
+- **Lưu ý**: Kèm theo email thông báo chi tiết
+
+### 7. Thông báo khi thời gian sự kiện thay đổi
+
+- **Trigger**: Khi organizer thay đổi startTime hoặc endTime của sự kiện đã PUBLISHED
+- **Gửi đến**: Tất cả users đã đăng ký sự kiện (có ticket VALID)
+- **Type**: `event_time_changed`
+- **Nội dung**: "Sự kiện [tên] đã thay đổi thời gian (thời gian bắt đầu/kết thúc). Vui lòng kiểm tra email để biết chi tiết."
+- **Lưu ý**: Kèm theo email thông báo chi tiết với thời gian cũ và mới
 
 ## Cấu hình môi trường
 
@@ -495,10 +525,14 @@ function App() {
 ```json
 {
   "eventId": "uuid-of-event",
-  "type": "staff_assigned" | "event_created" | "event_approved" | "event_rejected" | "one_day" | "thirty_min",
+  "type": "staff_assigned" | "event_created" | "event_approved" | "event_rejected" | "event_cancelled" | "event_time_changed" | "one_day" | "thirty_min" | "incident_reported",
   "startTime": "2025-12-15T09:00:00Z",  // Có trong staff_assigned, one_day, thirty_min
   "endTime": "2025-12-15T17:00:00Z",    // Có trong staff_assigned
-  "status": "PENDING" | "PUBLISHED" | "CANCELED"  // Có trong event_created, event_approved, event_rejected
+  "status": "PENDING" | "PUBLISHED" | "CANCELED",  // Có trong event_created, event_approved, event_rejected
+  "title": "Event Title",  // Có trong event_cancelled, event_time_changed
+  "incidentId": 123,  // Có trong incident_reported
+  "severity": "LOW" | "MEDIUM" | "HIGH",  // Có trong incident_reported
+  "reporterName": "Staff Name"  // Có trong incident_reported (optional)
 }
 ```
 
@@ -510,6 +544,8 @@ function App() {
 | `event_created`  | Event được tạo thành công       | Organizer owner   | `eventId`, `status`               |
 | `event_approved` | Event được admin approve        | Organizer owner   | `eventId`, `status`               |
 | `event_rejected` | Event bị admin reject           | Organizer owner   | `eventId`, `status`               |
+| `event_cancelled` | Event bị hủy (đã PUBLISHED)     | Tất cả users đã đăng ký | `eventId`, `title` |
+| `event_time_changed` | Thời gian event thay đổi        | Tất cả users đã đăng ký | `eventId`, `title` |
 | `one_day`        | Event sắp diễn ra trong 1 ngày  | Tất cả users      | `eventId`, `startTime`            |
 | `thirty_min`     | Event sắp diễn ra trong 30 phút | Tất cả users      | `eventId`, `startTime`            |
 | `incident_reported` | Staff báo cáo sự cố trước sự kiện | Admin + Organizer owner | `eventId`, `incidentId`, `severity`, `reporterName` |
@@ -570,6 +606,25 @@ OneSignal.addClickListener((event) => {
       navigateToEvent(data.eventId);
       break;
 
+    case 'event_cancelled':
+      // Thông báo sự kiện bị hủy
+      showToast(
+        `Sự kiện "${data.title || 'này'}" đã bị hủy. Vé của bạn đã được tự động hủy.`,
+        'error',
+      );
+      // Có thể điều hướng đến trang my-tickets để xem vé đã hủy
+      navigateToMyTickets();
+      break;
+
+    case 'event_time_changed':
+      // Thông báo thời gian sự kiện thay đổi
+      showToast(
+        `Sự kiện "${data.title || 'này'}" đã thay đổi thời gian. Vui lòng kiểm tra email để biết chi tiết.`,
+        'info',
+      );
+      navigateToEvent(data.eventId);
+      break;
+
     default:
       // Xử lý các type khác hoặc fallback
       if (data?.eventId) {
@@ -615,6 +670,29 @@ OneSignal.setNotificationOpenedHandler((event) => {
       case 'thirty_min':
         // Event reminder - điều hướng đến chi tiết event
         navigation.navigate('EventDetail', { eventId: data.eventId });
+        break;
+
+      case 'event_cancelled':
+        // Event bị hủy - điều hướng đến trang my tickets
+        navigation.navigate('MyTickets', {
+          eventId: data.eventId,
+          showCancelled: true,
+        });
+        // Hoặc hiển thị modal thông báo
+        showAlert(
+          'Sự kiện đã bị hủy',
+          `Sự kiện "${data.title || 'này'}" đã bị hủy. Vé của bạn đã được tự động hủy.`,
+        );
+        break;
+
+      case 'event_time_changed':
+        // Thời gian event thay đổi - điều hướng đến chi tiết event
+        navigation.navigate('EventDetail', { eventId: data.eventId });
+        // Hoặc hiển thị modal thông báo
+        showAlert(
+          'Thời gian sự kiện đã thay đổi',
+          `Sự kiện "${data.title || 'này'}" đã thay đổi thời gian. Vui lòng kiểm tra email để biết chi tiết.`,
+        );
         break;
 
       default:
@@ -892,6 +970,37 @@ function onUserLogin() {
 5. **Error Handling:** Luôn xử lý lỗi khi gọi API đăng ký subscription
 6. **Testing:** Test trên thiết bị thật, không chỉ simulator/emulator
 
+## 📧 Email Notifications
+
+Một số thông báo được gửi kèm theo email để cung cấp thông tin chi tiết hơn:
+
+### 1. Email thông báo hủy sự kiện
+
+- **Trigger**: Khi sự kiện bị hủy (kèm theo push notification `event_cancelled`)
+- **Gửi đến**: Tất cả users đã đăng ký sự kiện
+- **Subject**: `Sự kiện "[Tên sự kiện]" đã bị hủy`
+- **Nội dung**: 
+  - Thông báo sự kiện đã bị hủy
+  - Thời gian dự kiến (nếu có)
+  - Thông báo vé đã được tự động hủy
+  - Hướng dẫn liên hệ hỗ trợ
+
+### 2. Email thông báo thay đổi thời gian sự kiện
+
+- **Trigger**: Khi organizer thay đổi startTime hoặc endTime (kèm theo push notification `event_time_changed`)
+- **Gửi đến**: Tất cả users đã đăng ký sự kiện
+- **Subject**: `Thông báo thay đổi thời gian: [Tên sự kiện]`
+- **Nội dung**:
+  - Hiển thị thời gian cũ (gạch ngang) và thời gian mới (màu xanh, đậm)
+  - Hỗ trợ thay đổi startTime, endTime, hoặc cả hai
+  - Hướng dẫn sắp xếp lại thời gian
+
+### Lưu ý:
+
+- Email được gửi tự động khi có push notification tương ứng
+- Frontend không cần xử lý email, chỉ cần xử lý push notification
+- Email cung cấp thông tin chi tiết hơn, push notification chỉ là thông báo nhanh
+
 ## 📋 Tóm tắt các Notification Types
 
 ### Cho Staff:
@@ -904,7 +1013,12 @@ function onUserLogin() {
 - **`event_approved`**: Nhận khi admin approve event (status PUBLISHED)
 - **`event_rejected`**: Nhận khi admin reject event (status CANCELED)
 
-### Cho Tất cả Users:
+### Cho Tất cả Users đã đăng ký sự kiện:
+
+- **`event_cancelled`**: Nhận khi sự kiện đã đăng ký bị hủy (kèm email)
+- **`event_time_changed`**: Nhận khi thời gian sự kiện đã đăng ký thay đổi (kèm email)
+
+### Cho Tất cả Users (đã subscribe OneSignal):
 
 - **`one_day`**: Nhận trước 1 ngày khi event sắp diễn ra
 - **`thirty_min`**: Nhận trước 30 phút khi event sắp diễn ra

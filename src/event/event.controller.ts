@@ -305,4 +305,35 @@ export class EventController {
   ) {
     return this.eventService.updateEventStatus(id, dto);
   }
+
+  @Post(':id/cancel')
+  @Roles(UserRole.admin, UserRole.event_organizer)
+  @ApiOperation({
+    summary: 'Cancel published event - Required roles: admin, event_organizer',
+    description:
+      'Cancel a published event when there are issues or need to reschedule. Admin can cancel any event. Event organizer can only cancel events from their own organizers. When event is cancelled, all tickets will be marked as CANCELLED.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Event cancelled successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Event not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Bad request (e.g., event is already cancelled/completed, cannot cancel)',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Forbidden. Required roles: admin, event_organizer. Or you do not own this event organizer.',
+  })
+  async cancelEvent(@Param('id') id: string, @GetUser() user: any) {
+    return this.eventService.cancelEvent(id, {
+      userId: user.id,
+      roleName: user.roleName,
+    });
+  }
 }

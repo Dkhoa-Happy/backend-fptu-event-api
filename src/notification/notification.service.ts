@@ -441,4 +441,182 @@ export class NotificationService {
       );
     }
   }
+
+  /**
+   * Gửi thông báo cho tất cả users đã đăng ký sự kiện khi sự kiện bị hủy
+   * @param eventId - ID của sự kiện bị hủy
+   * @param eventTitle - Tiêu đề sự kiện
+   */
+  async notifyEventCancelledToAttendees(
+    eventId: string,
+    eventTitle: string,
+  ) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping event cancellation notification.',
+      );
+      return;
+    }
+
+    // Lấy tất cả tickets VALID của sự kiện (trước khi bị hủy)
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        eventId,
+        status: 'VALID', // Chỉ gửi cho những người có vé còn hiệu lực
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    if (tickets.length === 0) {
+      this.logger.log(
+        `No valid tickets found for event ${eventId}. Skipping notification.`,
+      );
+      return;
+    }
+
+    // Lấy unique user IDs
+    const userIds = Array.from(new Set(tickets.map((t) => t.userId)));
+
+    // Lấy tất cả subscriptions của các users này
+    const subscriptions = await this.prisma.userSubscription.findMany({
+      where: {
+        userId: { in: userIds },
+      },
+      select: { subscriptionId: true },
+    });
+
+    if (subscriptions.length === 0) {
+      this.logger.warn(
+        `No subscriptions found for ${userIds.length} users registered for event ${eventId}. Skipping notification.`,
+      );
+      return;
+    }
+
+    const heading = 'Sự kiện đã bị hủy';
+    const content = `Sự kiện "${eventTitle}" đã bị hủy. Vé của bạn đã được tự động hủy.`;
+
+    const playerIds = subscriptions.map((sub) => sub.subscriptionId);
+
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        eventId: eventId,
+        type: 'event_cancelled',
+        title: eventTitle,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent event cancellation notification to ${subscriptions.length} subscribers (${userIds.length} users) for event ${eventId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send event cancellation notification for event ${eventId}: ${String(
+          error,
+        )}`,
+      );
+    }
+  }
+
+  /**
+   * Gửi thông báo cho tất cả users đã đăng ký sự kiện khi thời gian sự kiện thay đổi
+   * @param eventId - ID của sự kiện
+   * @param eventTitle - Tiêu đề sự kiện
+   * @param hasStartTimeChange - Có thay đổi thời gian bắt đầu không
+   * @param hasEndTimeChange - Có thay đổi thời gian kết thúc không
+   */
+  async notifyEventTimeChangedToAttendees(
+    eventId: string,
+    eventTitle: string,
+    hasStartTimeChange: boolean,
+    hasEndTimeChange: boolean,
+  ) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping event time change notification.',
+      );
+      return;
+    }
+
+    // Lấy tất cả tickets VALID của sự kiện
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        eventId,
+        status: 'VALID', // Chỉ gửi cho những người có vé còn hiệu lực
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    if (tickets.length === 0) {
+      this.logger.log(
+        `No valid tickets found for event ${eventId}. Skipping notification.`,
+      );
+      return;
+    }
+
+    // Lấy unique user IDs
+    const userIds = Array.from(new Set(tickets.map((t) => t.userId)));
+
+    // Lấy tất cả subscriptions của các users này
+    const subscriptions = await this.prisma.userSubscription.findMany({
+      where: {
+        userId: { in: userIds },
+      },
+      select: { subscriptionId: true },
+    });
+
+    if (subscriptions.length === 0) {
+      this.logger.warn(
+        `No subscriptions found for ${userIds.length} users registered for event ${eventId}. Skipping notification.`,
+      );
+      return;
+    }
+
+    let heading = 'Thông báo thay đổi thời gian sự kiện';
+    let content = `Sự kiện "${eventTitle}" đã thay đổi thời gian`;
+    if (hasStartTimeChange && hasEndTimeChange) {
+      content += ' (thời gian bắt đầu và kết thúc)';
+    } else if (hasStartTimeChange) {
+      content += ' (thời gian bắt đầu)';
+    } else if (hasEndTimeChange) {
+      content += ' (thời gian kết thúc)';
+    }
+    content += '. Vui lòng kiểm tra email để biết chi tiết.';
+
+    const playerIds = subscriptions.map((sub) => sub.subscriptionId);
+
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        eventId: eventId,
+        type: 'event_time_changed',
+        title: eventTitle,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent event time change notification to ${subscriptions.length} subscribers (${userIds.length} users) for event ${eventId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send event time change notification for event ${eventId}: ${String(
+          error,
+        )}`,
+      );
+    }
+  }
 }
