@@ -38,7 +38,7 @@ export class EventService {
 
     if (!organizer) {
       throw new NotFoundException(
-        `Organizer with ID ${dto.organizerId} not found`,
+        `Không tìm thấy organizer với ID ${dto.organizerId}`,
       );
     }
 
@@ -54,13 +54,13 @@ export class EventService {
 
       if (userOrganizers.length === 0) {
         throw new ForbiddenException(
-          'You cannot create events. You are not the owner of any organizer. Only organizer owners can create events.',
+          'Bạn không thể tạo sự kiện. Bạn không phải là chủ sở hữu của bất kỳ organizer nào. Chỉ chủ sở hữu organizer mới có thể tạo sự kiện.',
         );
       }
 
       if (!organizer.ownerId || organizer.ownerId !== currentUser.id) {
         throw new ForbiddenException(
-          'You do not have permission to create events for this organizer. You are not the owner of this organizer.',
+          'Bạn không có quyền tạo sự kiện cho organizer này. Bạn không phải là chủ sở hữu của organizer này.',
         );
       }
     }
@@ -68,7 +68,7 @@ export class EventService {
     // Validate host (optional, default = người tạo)
     const hostId = dto.hostId ?? currentUser?.id;
     if (!hostId) {
-      throw new BadRequestException('Host is required');
+      throw new BadRequestException('Host là bắt buộc');
     }
 
     const hostUser = await this.prisma.user.findUnique({
@@ -77,15 +77,15 @@ export class EventService {
     });
 
     if (!hostUser) {
-      throw new NotFoundException(`Host user with ID ${hostId} not found`);
+      throw new NotFoundException(`Không tìm thấy user host với ID ${hostId}`);
     }
 
     if (!hostUser.isActive) {
-      throw new BadRequestException('Host user is not active');
+      throw new BadRequestException('User host không đang hoạt động');
     }
 
     if (hostUser.roleName === 'student') {
-      throw new BadRequestException('Host must not be a student account');
+      throw new BadRequestException('Host không được là tài khoản sinh viên');
     }
 
     // Validate venue exists if provided
@@ -183,28 +183,28 @@ export class EventService {
     // Check if startTime is before endTime
     if (startTime >= endTime) {
       throw new BadRequestException(
-        'Event start time must be before event end time',
+        'Thời gian bắt đầu sự kiện phải trước thời gian kết thúc sự kiện',
       );
     }
 
     // Check if startTimeRegister is before endTimeRegister
     if (startTimeRegister >= endTimeRegister) {
       throw new BadRequestException(
-        'Registration start time must be before registration end time',
+        'Thời gian bắt đầu đăng ký phải trước thời gian kết thúc đăng ký',
       );
     }
 
     // Check if registration ends before event starts
     if (endTimeRegister >= startTime) {
       throw new BadRequestException(
-        'Registration must end before the event starts',
+        'Thời gian kết thúc đăng ký phải trước khi sự kiện bắt đầu',
       );
     }
 
     // Check if registration start is before event start
     if (startTimeRegister >= startTime) {
       throw new BadRequestException(
-        'Registration start time must be before event start time',
+        'Thời gian bắt đầu đăng ký phải trước thời gian bắt đầu sự kiện',
       );
     }
 
@@ -216,7 +216,7 @@ export class EventService {
     // Validate title is not just whitespace
     if (!dto.title.trim()) {
       throw new BadRequestException(
-        'Event title cannot be empty or whitespace',
+        'Tiêu đề sự kiện không được để trống hoặc chỉ có khoảng trắng',
       );
     }
 
@@ -828,7 +828,7 @@ export class EventService {
     });
 
     if (!event) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
     }
 
     const checkinCountMap = await this.getCheckinCountByEventIds([event.id]);
@@ -839,9 +839,7 @@ export class EventService {
       const isSameCampus =
         event.venue && event.venue.campusId === currentUser.campusId;
       if (!event.isGlobal && !isSameCampus) {
-        throw new ForbiddenException(
-          'You do not have permission to access this event',
-        );
+        throw new ForbiddenException('Bạn không có quyền truy cập sự kiện này');
       }
     }
 
@@ -850,9 +848,7 @@ export class EventService {
       const isSameCampus =
         event.venue && event.venue.campusId === currentUser.campusId;
       if (!event.isGlobal && !isSameCampus) {
-        throw new ForbiddenException(
-          'You do not have permission to access this event',
-        );
+        throw new ForbiddenException('Bạn không có quyền truy cập sự kiện này');
       }
     }
 
@@ -937,7 +933,7 @@ export class EventService {
     });
 
     if (!updatedEvent) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
     }
 
     const updatedCheckinCount = await this.getCheckinCountByEventIds([id]);
@@ -966,7 +962,7 @@ export class EventService {
     });
 
     if (!existingEvent) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
     }
 
     // Nếu là event_organizer, kiểm tra quyền và không cho phép update status
@@ -977,7 +973,7 @@ export class EventService {
         existingEvent.organizer.ownerId !== currentUser.id
       ) {
         throw new ForbiddenException(
-          'You do not have permission to update this event. You are not the owner of this organizer.',
+          'Bạn không có quyền cập nhật sự kiện này. Bạn không phải là chủ sở hữu của organizer này.',
         );
       }
     }
@@ -995,7 +991,7 @@ export class EventService {
 
       if (!organizer) {
         throw new NotFoundException(
-          `Organizer with ID ${dto.organizerId} not found`,
+          `Không tìm thấy organizer với ID ${dto.organizerId}`,
         );
       }
 
@@ -1005,7 +1001,7 @@ export class EventService {
       if (currentUser?.roleName === 'event_organizer' && currentUser.id) {
         if (!organizer.ownerId || organizer.ownerId !== currentUser.id) {
           throw new ForbiddenException(
-            'You do not have permission to change event to this organizer. You are not the owner of this organizer.',
+            'Bạn không có quyền chuyển sự kiện sang organizer này. Bạn không phải là chủ sở hữu của organizer này.',
           );
         }
       }
@@ -1078,7 +1074,7 @@ export class EventService {
     if (dto.startTime !== undefined || dto.endTime !== undefined) {
       if (finalStartTime >= finalEndTime) {
         throw new BadRequestException(
-          'Event start time must be before event end time',
+          'Thời gian bắt đầu sự kiện phải trước thời gian kết thúc sự kiện',
         );
       }
     }
@@ -1089,7 +1085,7 @@ export class EventService {
     ) {
       if (finalStartTimeRegister >= finalEndTimeRegister) {
         throw new BadRequestException(
-          'Registration start time must be before registration end time',
+          'Thời gian bắt đầu đăng ký phải trước thời gian kết thúc đăng ký',
         );
       }
     }
@@ -1098,7 +1094,7 @@ export class EventService {
     if (dto.endTimeRegister !== undefined || dto.startTime !== undefined) {
       if (finalEndTimeRegister >= finalStartTime) {
         throw new BadRequestException(
-          'Registration must end before the event starts',
+          'Thời gian kết thúc đăng ký phải trước khi sự kiện bắt đầu',
         );
       }
     }
@@ -1107,7 +1103,7 @@ export class EventService {
     if (dto.startTimeRegister !== undefined || dto.startTime !== undefined) {
       if (finalStartTimeRegister >= finalStartTime) {
         throw new BadRequestException(
-          'Registration start time must be before event start time',
+          'Thời gian bắt đầu đăng ký phải trước thời gian bắt đầu sự kiện',
         );
       }
     }
@@ -1116,12 +1112,12 @@ export class EventService {
     if (dto.title !== undefined) {
       if (!dto.title.trim()) {
         throw new BadRequestException(
-          'Event title cannot be empty or whitespace',
+          'Tiêu đề sự kiện không được để trống hoặc chỉ có khoảng trắng',
         );
       }
       if (dto.title.length > 200) {
         throw new BadRequestException(
-          'Event title must not exceed 200 characters',
+          'Tiêu đề sự kiện không được vượt quá 200 ký tự',
         );
       }
     }
@@ -1129,10 +1125,12 @@ export class EventService {
     // Validate maxCapacity if being updated
     if (dto.maxCapacity !== undefined) {
       if (dto.maxCapacity < 1) {
-        throw new BadRequestException('Maximum capacity must be at least 1');
+        throw new BadRequestException('Sức chứa tối đa phải ít nhất là 1');
       }
       if (dto.maxCapacity > 10000) {
-        throw new BadRequestException('Maximum capacity cannot exceed 10000');
+        throw new BadRequestException(
+          'Sức chứa tối đa không được vượt quá 10000',
+        );
       }
     }
 
@@ -1257,7 +1255,7 @@ export class EventService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException(`Event with ID ${id} not found`);
+        throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
       }
 
       if (
@@ -1286,13 +1284,13 @@ export class EventService {
       });
 
       if (!event) {
-        throw new NotFoundException(`Event with ID ${id} not found`);
+        throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
       }
 
       // Chỉ cho phép thay đổi status từ PENDING sang PUBLISHED hoặc CANCELED
       if (event.status !== EventStatus.PENDING) {
         throw new BadRequestException(
-          `Event status is ${event.status}. Only PENDING events can be approved or canceled.`,
+          `Trạng thái sự kiện là ${event.status}. Chỉ sự kiện PENDING mới có thể được phê duyệt hoặc hủy.`,
         );
       }
 
@@ -1406,49 +1404,7 @@ export class EventService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException(`Event with ID ${id} not found`);
-      }
-
-      throw error;
-    }
-  }
-
-  async remove(id: string) {
-    // Check if event exists
-    const event = await this.prisma.event.findUnique({
-      where: { id },
-    });
-
-    if (!event) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
-    }
-
-    try {
-      await this.prisma.event.delete({
-        where: { id },
-      });
-
-      return { message: `Event with ID ${id} has been deleted successfully` };
-    } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code: string }).code === 'P2025'
-      ) {
-        throw new NotFoundException(`Event with ID ${id} not found`);
-      }
-
-      // Handle foreign key constraint errors
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code: string }).code === 'P2003'
-      ) {
-        throw new BadRequestException(
-          'Cannot delete event because it is referenced by other records (e.g., tickets, feedbacks)',
-        );
+        throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
       }
 
       throw error;
@@ -1614,7 +1570,7 @@ export class EventService {
     });
 
     if (!event) {
-      throw new NotFoundException(`Event with ID ${eventId} not found`);
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${eventId}`);
     }
 
     // Check permission: admin can assign to any event, event_organizer only to their own events
@@ -1622,13 +1578,13 @@ export class EventService {
       // Kiểm tra xem user có phải là owner của organizer không
       if (!event.organizer.ownerId) {
         throw new ForbiddenException(
-          'This organizer does not have an owner. You cannot assign staff to events of this organizer.',
+          'Organizer này không có chủ sở hữu. Bạn không thể phân công staff cho sự kiện của organizer này.',
         );
       }
 
       if (event.organizer.ownerId !== currentUser.userId) {
         throw new ForbiddenException(
-          'You do not have permission to assign staff to this event. You are not the owner of this organizer.',
+          'Bạn không có quyền phân công staff cho sự kiện này. Bạn không phải là chủ sở hữu của organizer này.',
         );
       }
     }
@@ -1640,19 +1596,19 @@ export class EventService {
     });
 
     if (!user) {
-      throw new NotFoundException(`User with ID ${dto.userId} not found`);
+      throw new NotFoundException(`Không tìm thấy user với ID ${dto.userId}`);
     }
 
     // Validate role: only staff can be assigned, not student or other roles
     if (user.roleName === 'student') {
       throw new BadRequestException(
-        'Cannot assign student to event. Only staff members can be assigned.',
+        'Không thể phân công sinh viên cho sự kiện. Chỉ thành viên staff mới có thể được phân công.',
       );
     }
 
     if (user.roleName !== 'staff') {
       throw new BadRequestException(
-        `User with ID ${dto.userId} is not a staff member. Only staff can be assigned to events.`,
+        `User với ID ${dto.userId} không phải là staff. Chỉ staff mới có thể được phân công cho sự kiện.`,
       );
     }
 
@@ -1777,7 +1733,7 @@ export class EventService {
         (error as { code: string }).code === 'P2002'
       ) {
         throw new BadRequestException(
-          'This staff member is already assigned to this event',
+          'Staff này đã được phân công cho sự kiện này',
         );
       }
 
@@ -1787,7 +1743,7 @@ export class EventService {
         'code' in error &&
         (error as { code: string }).code === 'P2003'
       ) {
-        throw new NotFoundException('Event or User not found');
+        throw new NotFoundException('Không tìm thấy sự kiện hoặc user');
       }
 
       throw error;
@@ -1813,7 +1769,7 @@ export class EventService {
     });
 
     if (!event) {
-      throw new NotFoundException(`Event with ID ${eventId} not found`);
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${eventId}`);
     }
 
     // Check permission: admin can remove from any event, event_organizer only from their own events
@@ -1821,13 +1777,13 @@ export class EventService {
       // Kiểm tra xem user có phải là owner của organizer không
       if (!event.organizer.ownerId) {
         throw new ForbiddenException(
-          'This organizer does not have an owner. You cannot remove staff from events of this organizer.',
+          'Organizer này không có chủ sở hữu. Bạn không thể gỡ staff khỏi sự kiện của organizer này.',
         );
       }
 
       if (event.organizer.ownerId !== currentUser.userId) {
         throw new ForbiddenException(
-          'You do not have permission to remove staff from this event. You are not the owner of this organizer.',
+          'Bạn không có quyền gỡ staff khỏi sự kiện này. Bạn không phải là chủ sở hữu của organizer này.',
         );
       }
     }
@@ -1854,7 +1810,7 @@ export class EventService {
 
     if (!eventStaff) {
       throw new NotFoundException(
-        `Staff with ID ${userId} is not assigned to event ${eventId}`,
+        `Staff với ID ${userId} không được phân công cho sự kiện ${eventId}`,
       );
     }
 
@@ -1864,7 +1820,7 @@ export class EventService {
       });
 
       return {
-        message: `Staff ${eventStaff.user.userName} (ID: ${userId}) has been removed from event ${eventId}`,
+        message: `Đã gỡ staff ${eventStaff.user.userName} (ID: ${userId}) khỏi sự kiện ${eventId}`,
       };
     } catch (error: unknown) {
       if (
@@ -1873,7 +1829,7 @@ export class EventService {
         'code' in error &&
         (error as { code: string }).code === 'P2025'
       ) {
-        throw new NotFoundException('EventStaff not found');
+        throw new NotFoundException('Không tìm thấy EventStaff');
       }
 
       throw error;
@@ -2050,7 +2006,7 @@ export class EventService {
     });
 
     if (!event) {
-      throw new NotFoundException('Event not found');
+      throw new NotFoundException('Không tìm thấy sự kiện');
     }
 
     const isAdmin = user.roleName === 'admin';
@@ -2070,13 +2026,13 @@ export class EventService {
       }));
 
     if (!isAdmin && !isOrganizerOwner && !isAssignedStaff) {
-      throw new ForbiddenException('You are not allowed to view this summary');
+      throw new ForbiddenException('Bạn không được phép xem tổng kết này');
     }
 
     // Ensure event ended
     const now = new Date();
     if (now < new Date(event.endTime)) {
-      throw new BadRequestException('Event has not ended yet');
+      throw new BadRequestException('Sự kiện chưa kết thúc');
     }
 
     return this.eventSummaryService.getSummary(eventId);

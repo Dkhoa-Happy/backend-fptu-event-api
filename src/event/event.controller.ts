@@ -127,11 +127,7 @@ export class EventController {
   }
 
   @Get('stats/monthly')
-  @Roles(
-    UserRole.admin,
-    UserRole.staff,
-    UserRole.event_organizer,
-  )
+  @Roles(UserRole.admin, UserRole.staff, UserRole.event_organizer)
   @ApiOperation({
     summary:
       'Thống kê số lượng sự kiện theo tháng - Required roles: admin, staff, event_organizer',
@@ -143,8 +139,7 @@ export class EventController {
     description: 'Thống kê số lượng sự kiện theo tháng',
   })
   @ApiForbiddenResponse({
-    description:
-      'Forbidden. Required roles: admin, staff, event_organizer',
+    description: 'Forbidden. Required roles: admin, staff, event_organizer',
   })
   async getEventStatsByMonth(@Query() query: QueryEventStatsDto) {
     return this.eventService.getEventStatsByMonth(query);
@@ -309,29 +304,5 @@ export class EventController {
     @Body() dto: UpdateEventStatusDto,
   ) {
     return this.eventService.updateEventStatus(id, dto);
-  }
-
-  @Delete(':id')
-  @Roles(UserRole.admin, UserRole.event_organizer)
-  @ApiOperation({
-    summary: 'Delete event by ID - Required roles: admin, event_organizer',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Event deleted successfully',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Event not found',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Cannot delete event (referenced by other records)',
-  })
-  @ApiForbiddenResponse({
-    description: 'Forbidden. Required roles: admin, event_organizer',
-  })
-  async remove(@Param('id') id: string) {
-    return this.eventService.remove(id);
   }
 }

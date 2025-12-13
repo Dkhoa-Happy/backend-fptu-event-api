@@ -29,7 +29,7 @@ export class RolesGuard implements CanActivate {
 
     if (!userRole || !requiredRoles.includes(userRole)) {
       throw new ForbiddenException(
-        'You do not have permission to access this resource',
+        'Bạn không có quyền truy cập tài nguyên này',
       );
     }
 
