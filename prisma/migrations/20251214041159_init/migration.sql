@@ -33,6 +33,8 @@ CREATE TABLE "users" (
     "student_card_image" TEXT,
     "status" "UserStatus" NOT NULL DEFAULT 'PENDING',
     "refresh_token_hash" TEXT,
+    "password_reset_otp" TEXT,
+    "password_reset_otp_expires" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "role_name" "UserRole" NOT NULL,

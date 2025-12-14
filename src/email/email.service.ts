@@ -247,4 +247,44 @@ export class EmailService {
       html,
     });
   }
+
+  async sendPasswordResetOtp(params: {
+    email: string;
+    fullName: string;
+    otp: string;
+  }) {
+    const { email, fullName, otp } = params;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1976d2;">Mã OTP đặt lại mật khẩu</h2>
+        <p>Xin chào ${fullName || 'bạn'},</p>
+        <p>Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản của mình.</p>
+        <p>Vui lòng sử dụng mã OTP sau để xác nhận và đặt lại mật khẩu:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; display: inline-block;">
+            <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #1976d2; margin: 0;">
+              ${otp}
+            </p>
+          </div>
+        </div>
+        <p><strong>Lưu ý:</strong></p>
+        <ul style="color: #666;">
+          <li>Mã OTP này sẽ hết hạn sau <strong>10 phút</strong>.</li>
+          <li>Không chia sẻ mã OTP này với bất kỳ ai.</li>
+          <li>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</li>
+        </ul>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="color: #666; font-size: 12px;">
+          Trân trọng,<br/>
+          <strong>FPT Event Team</strong>
+        </p>
+      </div>
+    `;
+
+    await this.send({
+      to: email,
+      subject: 'Mã OTP đặt lại mật khẩu - FPT Event System',
+      html,
+    });
+  }
 }

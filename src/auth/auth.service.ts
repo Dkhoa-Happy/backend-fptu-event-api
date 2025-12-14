@@ -3,13 +3,19 @@ import {
   ConflictException,
   Injectable,
   UnauthorizedException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
+import * as crypto from 'crypto';
 import { UserStatus } from '@prisma/client';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 
@@ -349,5 +355,250 @@ export class AuthService {
   private excludePassword<T extends { passwordHash?: string | null }>(user: T) {
     const { passwordHash: _password, ...rest } = user;
     return rest;
+  }
+
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const { currentPassword, newPassword } = dto;
+
+    // Validate userId
+    if (!userId || typeof userId !== 'number') {
+      throw new UnauthorizedException('User ID is required');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        passwordHash: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        userName: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Kiểm tra user có passwordHash không (không phải Google login)
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'Tài khoản này sử dụng đăng nhập Google. Không thể đổi mật khẩu.',
+      );
+    }
+
+    // Xác thực mật khẩu hiện tại
+    try {
+      const isValidPassword = await argon2.verify(
+        user.passwordHash,
+        currentPassword,
+      );
+      if (!isValidPassword) {
+        throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
+      }
+    } catch {
+      throw new UnauthorizedException('Mật khẩu hiện tại không đúng');
+    }
+
+    // Kiểm tra mật khẩu mới khác mật khẩu cũ
+    const isSamePassword = await argon2.verify(
+      user.passwordHash,
+      newPassword,
+    );
+    if (isSamePassword) {
+      throw new BadRequestException(
+        'Mật khẩu mới phải khác mật khẩu hiện tại',
+      );
+    }
+
+    // Cập nhật mật khẩu mới
+    const newPasswordHash = await argon2.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newPasswordHash },
+    });
+
+    return {
+      message: 'Đổi mật khẩu thành công',
+    };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const { email } = dto;
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        userName: true,
+        passwordHash: true,
+        status: true,
+      },
+    });
+
+    // Không tiết lộ thông tin nếu email không tồn tại (security best practice)
+    if (!user) {
+      return {
+        message:
+          'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được mã OTP để đặt lại mật khẩu.',
+      };
+    }
+
+    // Kiểm tra user có passwordHash không (không phải Google login)
+    if (!user.passwordHash) {
+      return {
+        message:
+          'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được mã OTP để đặt lại mật khẩu.',
+      };
+    }
+
+    // Chỉ cho phép user đã được APPROVED
+    if (user.status !== UserStatus.APPROVED) {
+      return {
+        message:
+          'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được mã OTP để đặt lại mật khẩu.',
+      };
+    }
+
+    // Tạo OTP 6 chữ số
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = await argon2.hash(otp);
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+
+    // Lưu OTP vào database
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordResetOtp: otpHash,
+        passwordResetOtpExpires: otpExpires,
+      },
+    });
+
+    // Gửi email với OTP
+    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.userName;
+    await this.emailService.sendPasswordResetOtp({
+      email: user.email,
+      fullName,
+      otp,
+    });
+
+    return {
+      message:
+        'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được mã OTP để đặt lại mật khẩu.',
+    };
+  }
+
+  async verifyOtp(dto: VerifyOtpDto) {
+    const { email, otp } = dto;
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        passwordResetOtp: true,
+        passwordResetOtpExpires: true,
+        status: true,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Email hoặc OTP không hợp lệ.');
+    }
+
+    // Kiểm tra user status
+    if (user.status !== UserStatus.APPROVED) {
+      throw new BadRequestException(
+        'Tài khoản chưa được phê duyệt. Không thể đặt lại mật khẩu.',
+      );
+    }
+
+    // Kiểm tra OTP có tồn tại và chưa hết hạn
+    if (!user.passwordResetOtp || !user.passwordResetOtpExpires) {
+      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu OTP mới.');
+    }
+
+    if (user.passwordResetOtpExpires < new Date()) {
+      throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu OTP mới.');
+    }
+
+    // Verify OTP
+    try {
+      const isValid = await argon2.verify(user.passwordResetOtp, otp);
+      if (!isValid) {
+        throw new BadRequestException('OTP không đúng. Vui lòng kiểm tra lại.');
+      }
+    } catch {
+      throw new BadRequestException('OTP không đúng. Vui lòng kiểm tra lại.');
+    }
+
+    return {
+      message: 'OTP hợp lệ. Bạn có thể đặt lại mật khẩu.',
+      verified: true,
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const { email, otp, newPassword } = dto;
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        passwordResetOtp: true,
+        passwordResetOtpExpires: true,
+        status: true,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Email hoặc OTP không hợp lệ.');
+    }
+
+    // Kiểm tra user status
+    if (user.status !== UserStatus.APPROVED) {
+      throw new BadRequestException(
+        'Tài khoản chưa được phê duyệt. Không thể đặt lại mật khẩu.',
+      );
+    }
+
+    // Kiểm tra OTP có tồn tại và chưa hết hạn
+    if (!user.passwordResetOtp || !user.passwordResetOtpExpires) {
+      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu OTP mới.');
+    }
+
+    if (user.passwordResetOtpExpires < new Date()) {
+      throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu OTP mới.');
+    }
+
+    // Verify OTP
+    try {
+      const isValid = await argon2.verify(user.passwordResetOtp, otp);
+      if (!isValid) {
+        throw new BadRequestException('OTP không đúng. Vui lòng kiểm tra lại.');
+      }
+    } catch {
+      throw new BadRequestException('OTP không đúng. Vui lòng kiểm tra lại.');
+    }
+
+    // Cập nhật mật khẩu mới và xóa OTP
+    const newPasswordHash = await argon2.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: newPasswordHash,
+        passwordResetOtp: null,
+        passwordResetOtpExpires: null,
+      },
+    });
+
+    return {
+      message: 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới.',
+    };
   }
 }
