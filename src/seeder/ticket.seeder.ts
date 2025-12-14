@@ -37,6 +37,11 @@ export class TicketSeeder implements Seeder {
         return;
       }
 
+      const existingTicket = await tx.ticket.findUnique({
+        where: { qrCode: 'QR-STUDENT-DEMO-1' },
+        select: { eventId: true },
+      });
+
       await tx.ticket.upsert({
         where: { qrCode: 'QR-STUDENT-DEMO-1' },
         update: {
@@ -53,6 +58,30 @@ export class TicketSeeder implements Seeder {
           seatId: seat.id,
         },
       });
+
+      // Increment registeredCount if this is a new ticket or event changed
+      if (!existingTicket || existingTicket.eventId !== targetEvent.id) {
+        // If ticket existed with different event, decrement old event first
+        if (existingTicket && existingTicket.eventId !== targetEvent.id) {
+          await tx.event.update({
+            where: { id: existingTicket.eventId },
+            data: {
+              registeredCount: {
+                decrement: 1,
+              },
+            },
+          });
+        }
+        // Increment registeredCount of the new event
+        await tx.event.update({
+          where: { id: targetEvent.id },
+          data: {
+            registeredCount: {
+              increment: 1,
+            },
+          },
+        });
+      }
 
       await tx.seat.update({
         where: { id: seat.id },

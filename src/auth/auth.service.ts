@@ -45,9 +45,7 @@ export class AuthService {
     });
 
     if (!campus) {
-      throw new BadRequestException(
-        `Không tìm thấy campus với ID ${campusId}`,
-      );
+      throw new BadRequestException(`Không tìm thấy campus với ID ${campusId}`);
     }
 
     // Bắt buộc cung cấp hình thẻ sinh viên cho mọi tài khoản đăng ký
