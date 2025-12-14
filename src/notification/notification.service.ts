@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import * as OneSignal from '@onesignal/node-onesignal';
@@ -6,6 +6,7 @@ import { EventStatus, Prisma, IncidentSeverity } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { TestSendDto } from './dto/test-send.dto';
+import { QueryNotificationsDto } from './dto/query-notifications.dto';
 
 type NotificationWindow = 'one_day' | 'thirty_min';
 
@@ -351,6 +352,18 @@ export class NotificationService {
       this.logger.log(
         `Sent event status notification (${status}) to organizer owner ${organizerOwnerId} for event ${event.id}`,
       );
+
+      // Lưu notification vào database
+      await this.saveNotification({
+        userId: organizerOwnerId,
+        type: notificationType,
+        title: heading,
+        content: content,
+        data: {
+          eventId: event.id,
+          status: status,
+        },
+      });
     } catch (error) {
       this.logger.error(
         `Failed to send event status notification to organizer owner ${organizerOwnerId} for event ${event.id}: ${String(
@@ -447,10 +460,7 @@ export class NotificationService {
    * @param eventId - ID của sự kiện bị hủy
    * @param eventTitle - Tiêu đề sự kiện
    */
-  async notifyEventCancelledToAttendees(
-    eventId: string,
-    eventTitle: string,
-  ) {
+  async notifyEventCancelledToAttendees(eventId: string, eventTitle: string) {
     if (!this.oneSignalClient || !this.appId) {
       this.logger.warn(
         'OneSignal config missing. Skipping event cancellation notification.',
@@ -516,6 +526,23 @@ export class NotificationService {
       this.logger.log(
         `Sent event cancellation notification to ${subscriptions.length} subscribers (${userIds.length} users) for event ${eventId}`,
       );
+
+      // Lưu notification vào database cho từng user
+      const heading = 'Sự kiện đã bị hủy';
+      const content = `Sự kiện "${eventTitle}" đã bị hủy. Vé của bạn đã được tự động hủy.`;
+      for (const userId of userIds) {
+        await this.saveNotification({
+          userId,
+          type: 'event_cancelled',
+          title: heading,
+          content: content,
+          data: {
+            eventId: eventId,
+            type: 'event_cancelled',
+            title: eventTitle,
+          },
+        });
+      }
     } catch (error) {
       this.logger.error(
         `Failed to send event cancellation notification for event ${eventId}: ${String(
@@ -581,7 +608,7 @@ export class NotificationService {
       return;
     }
 
-    let heading = 'Thông báo thay đổi thời gian sự kiện';
+    const heading = 'Thông báo thay đổi thời gian sự kiện';
     let content = `Sự kiện "${eventTitle}" đã thay đổi thời gian`;
     if (hasStartTimeChange && hasEndTimeChange) {
       content += ' (thời gian bắt đầu và kết thúc)';
@@ -611,6 +638,21 @@ export class NotificationService {
       this.logger.log(
         `Sent event time change notification to ${subscriptions.length} subscribers (${userIds.length} users) for event ${eventId}`,
       );
+
+      // Lưu notification vào database cho từng user
+      for (const userId of userIds) {
+        await this.saveNotification({
+          userId,
+          type: 'event_time_changed',
+          title: heading,
+          content: content,
+          data: {
+            eventId: eventId,
+            type: 'event_time_changed',
+            title: eventTitle,
+          },
+        });
+      }
     } catch (error) {
       this.logger.error(
         `Failed to send event time change notification for event ${eventId}: ${String(
@@ -679,6 +721,31 @@ export class NotificationService {
       this.logger.log(
         `Sent cancellation request notification to ${adminSubs.length} admin(s) for request ${params.requestId}`,
       );
+
+      // Lưu notification vào database cho tất cả admin
+      const adminUsers = await this.prisma.user.findMany({
+        where: {
+          roleName: 'admin',
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      for (const admin of adminUsers) {
+        await this.saveNotification({
+          userId: admin.id,
+          type: 'cancellation_request',
+          title: heading,
+          content: content,
+          data: {
+            type: 'cancellation_request',
+            eventId: params.eventId,
+            requestId: params.requestId,
+            eventTitle: params.eventTitle,
+            reason: params.reason,
+          },
+        });
+      }
     } catch (error) {
       this.logger.error(
         `Failed to send cancellation request notification ${params.requestId}: ${String(error)}`,
@@ -735,6 +802,19 @@ export class NotificationService {
       this.logger.log(
         `Sent cancellation approval notification to organizer owner ${params.organizerOwnerId} for event ${params.eventId}`,
       );
+
+      // Lưu notification vào database
+      await this.saveNotification({
+        userId: params.organizerOwnerId,
+        type: 'cancellation_approved',
+        title: heading,
+        content: content,
+        data: {
+          type: 'cancellation_approved',
+          eventId: params.eventId,
+          eventTitle: params.eventTitle,
+        },
+      });
     } catch (error) {
       this.logger.error(
         `Failed to send cancellation approval notification to organizer owner ${params.organizerOwnerId} for event ${params.eventId}: ${String(error)}`,
@@ -793,10 +873,168 @@ export class NotificationService {
       this.logger.log(
         `Sent cancellation rejection notification to organizer owner ${params.organizerOwnerId} for event ${params.eventId}`,
       );
+
+      // Lưu notification vào database
+      await this.saveNotification({
+        userId: params.organizerOwnerId,
+        type: 'cancellation_rejected',
+        title: heading,
+        content: content,
+        data: {
+          type: 'cancellation_rejected',
+          eventId: params.eventId,
+          eventTitle: params.eventTitle,
+          adminNote: params.adminNote,
+        },
+      });
     } catch (error) {
       this.logger.error(
         `Failed to send cancellation rejection notification to organizer owner ${params.organizerOwnerId} for event ${params.eventId}: ${String(error)}`,
       );
     }
+  }
+
+  /**
+   * Lưu notification vào database
+   */
+  private async saveNotification(params: {
+    userId: number;
+    type: string;
+    title: string;
+    content: string;
+    data?: any;
+  }) {
+    try {
+      await this.prisma.notification.create({
+        data: {
+          userId: params.userId,
+          type: params.type,
+          title: params.title,
+          content: params.content,
+          data: params.data || {},
+        },
+      });
+    } catch (error) {
+      // Log lỗi nhưng không throw để không ảnh hưởng đến flow gửi notification
+      this.logger.error(
+        `Failed to save notification for user ${params.userId}: ${String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Lấy danh sách thông báo của user
+   */
+  async getUserNotifications(userId: number, query: QueryNotificationsDto) {
+    const { page = 1, limit = 10, isRead, type } = query;
+
+    const where: Prisma.NotificationWhereInput = {
+      userId,
+    };
+
+    if (isRead !== undefined) {
+      where.isRead = isRead;
+    }
+
+    if (type) {
+      where.type = type;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.notification.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          content: true,
+          data: true,
+          isRead: true,
+          readAt: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.notification.count({ where }),
+    ]);
+
+    return {
+      data: items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * Đánh dấu notification là đã đọc
+   */
+  async markAsRead(userId: number, notificationId: number) {
+    const notification = await this.prisma.notification.findFirst({
+      where: {
+        id: notificationId,
+        userId, // Đảm bảo user chỉ có thể đánh dấu notification của chính mình
+      },
+    });
+
+    if (!notification) {
+      throw new NotFoundException(
+        'Không tìm thấy thông báo hoặc bạn không có quyền truy cập',
+      );
+    }
+
+    if (notification.isRead) {
+      return notification;
+    }
+
+    return await this.prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Đánh dấu tất cả notifications của user là đã đọc
+   */
+  async markAllAsRead(userId: number) {
+    const result = await this.prisma.notification.updateMany({
+      where: {
+        userId,
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+
+    return {
+      message: `Đã đánh dấu ${result.count} thông báo là đã đọc`,
+      count: result.count,
+    };
+  }
+
+  /**
+   * Đếm số thông báo chưa đọc của user
+   */
+  async getUnreadCount(userId: number) {
+    const count = await this.prisma.notification.count({
+      where: {
+        userId,
+        isRead: false,
+      },
+    });
+
+    return { unreadCount: count };
   }
 }

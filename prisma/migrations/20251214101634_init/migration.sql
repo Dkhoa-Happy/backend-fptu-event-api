@@ -249,6 +249,21 @@ CREATE TABLE "event_cancellation_requests" (
     CONSTRAINT "event_cancellation_requests_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "notifications" (
+    "id" SERIAL NOT NULL,
+    "type" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "data" JSONB,
+    "is_read" BOOLEAN NOT NULL DEFAULT false,
+    "read_at" TIMESTAMP(3),
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "user_id" INTEGER NOT NULL,
+
+    CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_user_name_key" ON "users"("user_name");
 
@@ -305,6 +320,18 @@ CREATE INDEX "event_cancellation_requests_requested_by_idx" ON "event_cancellati
 
 -- CreateIndex
 CREATE INDEX "event_cancellation_requests_status_idx" ON "event_cancellation_requests"("status");
+
+-- CreateIndex
+CREATE INDEX "notifications_user_id_idx" ON "notifications"("user_id");
+
+-- CreateIndex
+CREATE INDEX "notifications_is_read_idx" ON "notifications"("is_read");
+
+-- CreateIndex
+CREATE INDEX "notifications_created_at_idx" ON "notifications"("created_at");
+
+-- CreateIndex
+CREATE INDEX "notifications_type_idx" ON "notifications"("type");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_campus_id_fkey" FOREIGN KEY ("campus_id") REFERENCES "campuses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -380,3 +407,6 @@ ALTER TABLE "event_cancellation_requests" ADD CONSTRAINT "event_cancellation_req
 
 -- AddForeignKey
 ALTER TABLE "event_cancellation_requests" ADD CONSTRAINT "event_cancellation_requests_requested_by_fkey" FOREIGN KEY ("requested_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
