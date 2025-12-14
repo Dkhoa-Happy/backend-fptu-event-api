@@ -17,6 +17,9 @@ import {
   QueryEventDto,
   AssignStaffDto,
   QueryEventStatsDto,
+  RequestCancellationDto,
+  ApproveCancellationDto,
+  QueryCancellationRequestsDto,
 } from './dto';
 
 @Injectable()
@@ -1514,6 +1517,7 @@ export class EventService {
 
   async cancelEvent(
     id: string,
+    dto: RequestCancellationDto,
     currentUser: { userId: number; roleName: string },
   ) {
     try {
@@ -1537,225 +1541,95 @@ export class EventService {
         throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
       }
 
-      // Check permissions
-      const isAdmin = currentUser.roleName === 'admin';
+      // Check permissions - only organizer owner can request cancellation
       const isOrganizerOwner =
         currentUser.roleName === 'event_organizer' &&
         event.organizer.ownerId === currentUser.userId;
 
-      if (!isAdmin && !isOrganizerOwner) {
+      if (!isOrganizerOwner) {
         throw new ForbiddenException(
-          'Bạn không có quyền hủy sự kiện này. Chỉ admin hoặc chủ sở hữu organizer mới có thể hủy sự kiện.',
+          'Bạn không có quyền yêu cầu hủy sự kiện này. Chỉ chủ sở hữu organizer mới có thể yêu cầu hủy sự kiện.',
         );
       }
 
-      // Only allow canceling PUBLISHED events
+      // Only allow requesting cancellation for PUBLISHED events
       if (event.status !== EventStatus.PUBLISHED) {
         throw new BadRequestException(
-          `Không thể hủy sự kiện này. Chỉ có thể hủy sự kiện đã được PUBLISHED. Trạng thái hiện tại: ${event.status}`,
+          `Không thể yêu cầu hủy sự kiện này. Chỉ có thể yêu cầu hủy sự kiện đã được PUBLISHED. Trạng thái hiện tại: ${event.status}`,
         );
       }
 
-      // Use transaction to ensure data consistency
-      return await this.prisma.$transaction(async (tx) => {
-        // Get all users who registered for this event (BEFORE cancelling tickets)
-        // to send notifications and emails
-        const registeredUsers = await tx.ticket.findMany({
+      // Check if there's already a PENDING cancellation request
+      const existingRequest =
+        await this.prisma.eventCancellationRequest.findFirst({
           where: {
             eventId: id,
-            status: TicketStatus.VALID, // Only get valid tickets
-          },
-          select: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
+            status: 'PENDING',
           },
         });
 
-        // Get event details for email/notification
-        const eventDetails = await tx.event.findUnique({
-          where: { id },
-          select: {
-            id: true,
-            title: true,
-            startTime: true,
-            endTime: true,
-          },
-        });
+      if (existingRequest) {
+        throw new BadRequestException(
+          'Đã có yêu cầu hủy sự kiện đang chờ phê duyệt. Vui lòng chờ admin xem xét.',
+        );
+      }
 
-        // Update event status to CANCELED
-        const updatedEvent = await tx.event.update({
-          where: { id },
+      // Create cancellation request
+      const cancellationRequest =
+        await this.prisma.eventCancellationRequest.create({
           data: {
-            status: EventStatus.CANCELED,
+            eventId: id,
+            requestedBy: currentUser.userId,
+            reason: dto.reason,
+            status: 'PENDING',
           },
           include: {
-            organizer: {
+            event: {
               select: {
                 id: true,
-                name: true,
-                description: true,
-                contactEmail: true,
-                logoUrl: true,
+                title: true,
               },
             },
-            venue: {
+            requester: {
               select: {
                 id: true,
-                name: true,
-                location: true,
-                hasSeats: true,
-                campusId: true,
-                campus: {
-                  select: {
-                    id: true,
-                    name: true,
-                    code: true,
-                    address: true,
-                  },
-                },
-              },
-            },
-            host: {
-              select: {
-                id: true,
-                userName: true,
-                email: true,
                 firstName: true,
                 lastName: true,
+                email: true,
               },
             },
           },
         });
 
-        // Cancel all tickets for this event (only VALID tickets)
-        const cancelledTickets = await tx.ticket.updateMany({
-          where: {
-            eventId: id,
-            status: TicketStatus.VALID, // Only cancel valid tickets
-          },
-          data: {
-            status: TicketStatus.CANCELLED,
-          },
+      // Send notification to all admins
+      this.notificationService
+        .notifyCancellationRequestToAdmins({
+          eventId: id,
+          eventTitle: event.title,
+          organizerName:
+            `${cancellationRequest.requester.firstName || ''} ${cancellationRequest.requester.lastName || ''}`.trim() ||
+            'Organizer',
+          reason: dto.reason,
+          requestId: cancellationRequest.id,
+        })
+        .catch((error) => {
+          console.error(
+            `Failed to send cancellation request notification to admins for event ${id}:`,
+            error,
+          );
         });
 
-        // Free all seats that were booked for this event
-        // Get all tickets with seats for this event
-        const ticketsWithSeats = await tx.ticket.findMany({
-          where: {
-            eventId: id,
-            seatId: { not: null },
-          },
-          select: {
-            seatId: true,
-          },
-        });
-
-        // Get unique seat IDs
-        const seatIds = [
-          ...new Set(
-            ticketsWithSeats
-              .map((t) => t.seatId)
-              .filter((id): id is number => id !== null),
-          ),
-        ];
-
-        // Free all seats
-        if (seatIds.length > 0) {
-          await tx.seat.updateMany({
-            where: {
-              id: { in: seatIds },
-            },
-            data: {
-              isBooked: false,
-            },
-          });
-        }
-
-        // Remove all staff assignments for this event
-        const removedStaff = await tx.eventStaff.deleteMany({
-          where: {
-            eventId: id,
-          },
-        });
-
-        // Remove all speaker assignments for this event
-        const removedSpeakers = await tx.eventSpeaker.deleteMany({
-          where: {
-            eventId: id,
-          },
-        });
-
-        // Note: registeredCount is not decremented because we want to keep the record
-        // of how many people registered before cancellation
-
-        // Send notification to organizer
-        if (event.organizer.ownerId) {
-          this.notificationService
-            .notifyEventStatusChange(
-              event.organizer.ownerId,
-              {
-                id: updatedEvent.id,
-                title: updatedEvent.title,
-                status: EventStatus.CANCELED,
-              },
-              EventStatus.CANCELED,
-            )
-            .catch((error) => {
-              console.error(
-                `Failed to send notification to organizer ${event.organizer.ownerId}:`,
-                error,
-              );
-            });
-        }
-
-        // Send notification to all registered users via OneSignal
-        this.notificationService
-          .notifyEventCancelledToAttendees(id, updatedEvent.title)
-          .catch((error) => {
-            console.error(
-              `Failed to send cancellation notification to attendees for event ${id}:`,
-              error,
-            );
-          });
-
-        // Send email to all registered users
-        const uniqueUsers = Array.from(
-          new Map(registeredUsers.map((t) => [t.user.id, t.user])).values(),
-        );
-
-        for (const user of uniqueUsers) {
-          this.emailService
-            .sendEventCancellationEmail({
-              email: user.email,
-              fullName:
-                `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
-                'Bạn',
-              eventTitle: eventDetails?.title || updatedEvent.title,
-              eventStartTime: eventDetails?.startTime,
-            })
-            .catch((error) => {
-              console.error(
-                `Failed to send cancellation email to user ${user.id} (${user.email}):`,
-                error,
-              );
-            });
-        }
-
-        return {
-          ...updatedEvent,
-          message: 'Sự kiện đã được hủy thành công',
-          cancelledTicketsCount: cancelledTickets.count,
-          freedSeatsCount: seatIds.length,
-          removedStaffCount: removedStaff.count,
-          removedSpeakersCount: removedSpeakers.count,
-        };
-      });
+      return {
+        message:
+          'Yêu cầu hủy sự kiện đã được gửi. Vui lòng chờ admin phê duyệt.',
+        cancellationRequest: {
+          id: cancellationRequest.id,
+          eventId: cancellationRequest.eventId,
+          reason: cancellationRequest.reason,
+          status: cancellationRequest.status,
+          createdAt: cancellationRequest.createdAt,
+        },
+      };
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -1768,6 +1642,528 @@ export class EventService {
 
       throw error;
     }
+  }
+
+  /**
+   * Admin phê duyệt hoặc từ chối yêu cầu hủy sự kiện
+   */
+  async approveCancellationRequest(
+    requestId: number,
+    dto: ApproveCancellationDto,
+    currentUser: { userId: number; roleName: string },
+  ) {
+    if (currentUser.roleName !== 'admin') {
+      throw new ForbiddenException(
+        'Chỉ admin mới có quyền phê duyệt yêu cầu hủy sự kiện.',
+      );
+    }
+
+    const cancellationRequest =
+      await this.prisma.eventCancellationRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          event: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              startTime: true,
+              endTime: true,
+              organizer: {
+                select: {
+                  ownerId: true,
+                },
+              },
+            },
+          },
+          requester: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+    if (!cancellationRequest) {
+      throw new NotFoundException(
+        `Không tìm thấy yêu cầu hủy sự kiện với ID ${requestId}`,
+      );
+    }
+
+    if (cancellationRequest.status !== 'PENDING') {
+      throw new BadRequestException(
+        `Yêu cầu hủy sự kiện này đã được xử lý. Trạng thái hiện tại: ${cancellationRequest.status}`,
+      );
+    }
+
+    // Update cancellation request status
+    const updatedRequest = await this.prisma.eventCancellationRequest.update({
+      where: { id: requestId },
+      data: {
+        status: dto.status,
+        reviewedBy: currentUser.userId,
+        reviewedAt: new Date(),
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            startTime: true,
+            endTime: true,
+            organizer: {
+              select: {
+                ownerId: true,
+              },
+            },
+          },
+        },
+        requester: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // If approved, actually cancel the event
+    if (dto.status === 'APPROVED') {
+      await this.processCancellation(
+        cancellationRequest.event.id,
+        cancellationRequest.reason,
+      );
+    } else {
+      // If rejected, send notification and email to organizer
+      const organizerOwnerId = cancellationRequest.event.organizer.ownerId;
+      if (organizerOwnerId) {
+        this.notificationService
+          .notifyCancellationRequestRejected({
+            organizerOwnerId,
+            eventId: cancellationRequest.event.id,
+            eventTitle: cancellationRequest.event.title,
+            adminNote: dto.adminNote,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to send rejection notification to organizer ${organizerOwnerId}:`,
+              error,
+            );
+          });
+
+        // Get organizer owner email
+        const organizerOwner = await this.prisma.user.findUnique({
+          where: { id: organizerOwnerId },
+          select: { email: true, firstName: true, lastName: true },
+        });
+
+        if (organizerOwner) {
+          this.emailService
+            .sendCancellationRequestRejectedEmail({
+              email: organizerOwner.email,
+              fullName:
+                `${organizerOwner.firstName || ''} ${organizerOwner.lastName || ''}`.trim() ||
+                'Bạn',
+              eventTitle: cancellationRequest.event.title,
+              reason: cancellationRequest.reason,
+              adminNote: dto.adminNote,
+            })
+            .catch((error) => {
+              console.error(
+                `Failed to send rejection email to organizer ${organizerOwnerId}:`,
+                error,
+              );
+            });
+        }
+      }
+    }
+
+    return {
+      message:
+        dto.status === 'APPROVED'
+          ? 'Yêu cầu hủy sự kiện đã được phê duyệt. Sự kiện đã được hủy.'
+          : 'Yêu cầu hủy sự kiện đã bị từ chối.',
+      cancellationRequest: updatedRequest,
+    };
+  }
+
+  /**
+   * Thực hiện hủy sự kiện (internal method, được gọi khi admin approve cancellation request)
+   */
+  private async processCancellation(eventId: string, reason?: string) {
+    // Use transaction to ensure data consistency
+    return await this.prisma.$transaction(async (tx) => {
+      // Get all users who registered for this event (BEFORE cancelling tickets)
+      // to send notifications and emails
+      const registeredUsers = await tx.ticket.findMany({
+        where: {
+          eventId: eventId,
+          status: TicketStatus.VALID, // Only get valid tickets
+        },
+        select: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      // Get event details for email/notification
+      const eventDetails = await tx.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          endTime: true,
+        },
+      });
+
+      // Update event status to CANCELED
+      const updatedEvent = await tx.event.update({
+        where: { id: eventId },
+        data: {
+          status: EventStatus.CANCELED,
+        },
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              contactEmail: true,
+              logoUrl: true,
+            },
+          },
+          venue: {
+            select: {
+              id: true,
+              name: true,
+              location: true,
+              hasSeats: true,
+              campusId: true,
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                  address: true,
+                },
+              },
+            },
+          },
+          host: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      // Cancel all tickets for this event (only VALID tickets)
+      const cancelledTickets = await tx.ticket.updateMany({
+        where: {
+          eventId: eventId,
+          status: TicketStatus.VALID, // Only cancel valid tickets
+        },
+        data: {
+          status: TicketStatus.CANCELLED,
+        },
+      });
+
+      // Free all seats that were booked for this event
+      // Get all tickets with seats for this event
+      const ticketsWithSeats = await tx.ticket.findMany({
+        where: {
+          eventId: eventId,
+          seatId: { not: null },
+        },
+        select: {
+          seatId: true,
+        },
+      });
+
+      // Get unique seat IDs
+      const seatIds = [
+        ...new Set(
+          ticketsWithSeats
+            .map((t) => t.seatId)
+            .filter((id): id is number => id !== null),
+        ),
+      ];
+
+      // Free all seats
+      if (seatIds.length > 0) {
+        await tx.seat.updateMany({
+          where: {
+            id: { in: seatIds },
+          },
+          data: {
+            isBooked: false,
+          },
+        });
+      }
+
+      // Remove all staff assignments for this event
+      const removedStaff = await tx.eventStaff.deleteMany({
+        where: {
+          eventId: eventId,
+        },
+      });
+
+      // Remove all speaker assignments for this event
+      const removedSpeakers = await tx.eventSpeaker.deleteMany({
+        where: {
+          eventId: eventId,
+        },
+      });
+
+      // Note: registeredCount is not decremented because we want to keep the record
+      // of how many people registered before cancellation
+
+      // Get organizer owner ID
+      const organizerOwnerId = await tx.event
+        .findUnique({
+          where: { id: eventId },
+          select: {
+            organizer: {
+              select: {
+                ownerId: true,
+              },
+            },
+          },
+        })
+        .then((e) => e?.organizer.ownerId);
+
+      // Send notification to organizer
+      if (organizerOwnerId) {
+        this.notificationService
+          .notifyEventStatusChange(
+            organizerOwnerId,
+            {
+              id: updatedEvent.id,
+              title: updatedEvent.title,
+              status: EventStatus.CANCELED,
+            },
+            EventStatus.CANCELED,
+          )
+          .catch((error) => {
+            console.error(
+              `Failed to send notification to organizer ${organizerOwnerId}:`,
+              error,
+            );
+          });
+      }
+
+      // Send notification to all registered users via OneSignal
+      this.notificationService
+        .notifyEventCancelledToAttendees(eventId, updatedEvent.title)
+        .catch((error) => {
+          console.error(
+            `Failed to send cancellation notification to attendees for event ${eventId}:`,
+            error,
+          );
+        });
+
+      // Send email to all registered users
+      const uniqueUsers = Array.from(
+        new Map(registeredUsers.map((t) => [t.user.id, t.user])).values(),
+      );
+
+      for (const user of uniqueUsers) {
+        this.emailService
+          .sendEventCancellationEmail({
+            email: user.email,
+            fullName:
+              `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Bạn',
+            eventTitle: eventDetails?.title || updatedEvent.title,
+            eventStartTime: eventDetails?.startTime,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to send cancellation email to user ${user.id} (${user.email}):`,
+              error,
+            );
+          });
+      }
+
+      // Send notification to organizer about cancellation approval
+      if (organizerOwnerId) {
+        this.notificationService
+          .notifyCancellationRequestApproved({
+            organizerOwnerId,
+            eventId: eventId,
+            eventTitle: updatedEvent.title,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to send approval notification to organizer ${organizerOwnerId}:`,
+              error,
+            );
+          });
+
+        // Get organizer owner email
+        const organizerOwner = await tx.user.findUnique({
+          where: { id: organizerOwnerId },
+          select: { email: true, firstName: true, lastName: true },
+        });
+
+        if (organizerOwner) {
+          this.emailService
+            .sendCancellationRequestApprovedEmail({
+              email: organizerOwner.email,
+              fullName:
+                `${organizerOwner.firstName || ''} ${organizerOwner.lastName || ''}`.trim() ||
+                'Bạn',
+              eventTitle: updatedEvent.title,
+              reason: reason,
+            })
+            .catch((error) => {
+              console.error(
+                `Failed to send approval email to organizer ${organizerOwnerId}:`,
+                error,
+              );
+            });
+        }
+      }
+
+      return {
+        ...updatedEvent,
+        message: 'Sự kiện đã được hủy thành công',
+        cancelledTicketsCount: cancelledTickets.count,
+        freedSeatsCount: seatIds.length,
+        removedStaffCount: removedStaff.count,
+        removedSpeakersCount: removedSpeakers.count,
+      };
+    });
+  }
+
+  /**
+   * Admin có thể hủy sự kiện trực tiếp (không cần approval)
+   */
+  async cancelEventByAdmin(
+    id: string,
+    currentUser: { userId: number; roleName: string },
+  ) {
+    if (currentUser.roleName !== 'admin') {
+      throw new ForbiddenException(
+        'Chỉ admin mới có quyền hủy sự kiện trực tiếp.',
+      );
+    }
+
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
+    }
+
+    // Only allow canceling PUBLISHED events
+    if (event.status !== EventStatus.PUBLISHED) {
+      throw new BadRequestException(
+        `Không thể hủy sự kiện này. Chỉ có thể hủy sự kiện đã được PUBLISHED. Trạng thái hiện tại: ${event.status}`,
+      );
+    }
+
+    return await this.processCancellation(id, 'Admin đã hủy sự kiện trực tiếp');
+  }
+
+  /**
+   * Admin lấy danh sách các yêu cầu hủy sự kiện
+   */
+  async getCancellationRequests(query: QueryCancellationRequestsDto) {
+    const { page = 1, limit = 10, status, eventId, requestedBy } = query;
+
+    const where: Prisma.EventCancellationRequestWhereInput = {};
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (eventId) {
+      where.eventId = eventId;
+    }
+
+    if (requestedBy) {
+      where.requestedBy = requestedBy;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.eventCancellationRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          event: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              startTime: true,
+              endTime: true,
+              organizer: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          requester: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          reviewer: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.eventCancellationRequest.count({ where }),
+    ]);
+
+    return {
+      data: items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findAssignedEvents(staffId: number, query: QueryEventDto) {

@@ -619,4 +619,184 @@ export class NotificationService {
       );
     }
   }
+
+  /**
+   * Gửi thông báo cho tất cả admin khi có yêu cầu hủy sự kiện từ organizer
+   */
+  async notifyCancellationRequestToAdmins(params: {
+    eventId: string;
+    eventTitle: string;
+    organizerName: string;
+    reason: string;
+    requestId: number;
+  }) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping cancellation request notification.',
+      );
+      return;
+    }
+
+    // Lấy subscription của tất cả admin
+    const adminSubs = await this.prisma.userSubscription.findMany({
+      where: {
+        user: {
+          roleName: 'admin',
+          isActive: true,
+        },
+      },
+      select: { subscriptionId: true },
+    });
+
+    if (adminSubs.length === 0) {
+      this.logger.warn(
+        `No admin subscriptions found for cancellation request ${params.requestId}. Skipping notification.`,
+      );
+      return;
+    }
+
+    const heading = 'Yêu cầu hủy sự kiện mới';
+    const content = `${params.organizerName} yêu cầu hủy sự kiện "${params.eventTitle}"`;
+
+    const playerIds = adminSubs.map((sub) => sub.subscriptionId);
+
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        type: 'cancellation_request',
+        eventId: params.eventId,
+        requestId: params.requestId,
+        eventTitle: params.eventTitle,
+        reason: params.reason,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent cancellation request notification to ${adminSubs.length} admin(s) for request ${params.requestId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send cancellation request notification ${params.requestId}: ${String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Gửi thông báo cho organizer khi yêu cầu hủy sự kiện được phê duyệt
+   */
+  async notifyCancellationRequestApproved(params: {
+    organizerOwnerId: number;
+    eventId: string;
+    eventTitle: string;
+  }) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping cancellation approval notification.',
+      );
+      return;
+    }
+
+    const subscriptions = await this.prisma.userSubscription.findMany({
+      where: { userId: params.organizerOwnerId },
+      select: { subscriptionId: true },
+    });
+
+    if (subscriptions.length === 0) {
+      this.logger.warn(
+        `Organizer owner ${params.organizerOwnerId} has no OneSignal subscription. Skipping notification.`,
+      );
+      return;
+    }
+
+    const heading = 'Yêu cầu hủy sự kiện đã được phê duyệt';
+    const content = `Yêu cầu hủy sự kiện "${params.eventTitle}" đã được admin phê duyệt. Sự kiện đã được hủy.`;
+
+    const playerIds = subscriptions.map((sub) => sub.subscriptionId);
+
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        type: 'cancellation_approved',
+        eventId: params.eventId,
+        eventTitle: params.eventTitle,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent cancellation approval notification to organizer owner ${params.organizerOwnerId} for event ${params.eventId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send cancellation approval notification to organizer owner ${params.organizerOwnerId} for event ${params.eventId}: ${String(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Gửi thông báo cho organizer khi yêu cầu hủy sự kiện bị từ chối
+   */
+  async notifyCancellationRequestRejected(params: {
+    organizerOwnerId: number;
+    eventId: string;
+    eventTitle: string;
+    adminNote?: string;
+  }) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping cancellation rejection notification.',
+      );
+      return;
+    }
+
+    const subscriptions = await this.prisma.userSubscription.findMany({
+      where: { userId: params.organizerOwnerId },
+      select: { subscriptionId: true },
+    });
+
+    if (subscriptions.length === 0) {
+      this.logger.warn(
+        `Organizer owner ${params.organizerOwnerId} has no OneSignal subscription. Skipping notification.`,
+      );
+      return;
+    }
+
+    const heading = 'Yêu cầu hủy sự kiện bị từ chối';
+    const content = `Yêu cầu hủy sự kiện "${params.eventTitle}" đã bị admin từ chối.`;
+
+    const playerIds = subscriptions.map((sub) => sub.subscriptionId);
+
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        type: 'cancellation_rejected',
+        eventId: params.eventId,
+        eventTitle: params.eventTitle,
+        adminNote: params.adminNote,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent cancellation rejection notification to organizer owner ${params.organizerOwnerId} for event ${params.eventId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send cancellation rejection notification to organizer owner ${params.organizerOwnerId} for event ${params.eventId}: ${String(error)}`,
+      );
+    }
+  }
 }

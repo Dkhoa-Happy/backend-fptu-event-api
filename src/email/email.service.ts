@@ -287,4 +287,74 @@ export class EmailService {
       html,
     });
   }
+
+  async sendCancellationRequestApprovedEmail(params: {
+    email: string;
+    fullName: string;
+    eventTitle: string;
+    reason?: string;
+  }) {
+    const { email, fullName, eventTitle, reason } = params;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2e7d32;">Yêu cầu hủy sự kiện đã được phê duyệt</h2>
+        <p>Xin chào ${fullName || 'bạn'},</p>
+        <p>Yêu cầu hủy sự kiện của bạn đã được admin phê duyệt. Sự kiện đã được hủy thành công.</p>
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #1976d2;">${eventTitle}</h3>
+          ${reason ? `<p><strong>Lý do hủy:</strong> ${reason}</p>` : ''}
+        </div>
+        <p><strong>Tất cả vé đã được tự động hủy và thông báo đã được gửi đến người tham gia.</strong></p>
+        <p>Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với bộ phận hỗ trợ.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="color: #666; font-size: 12px;">
+          Trân trọng,<br/>
+          <strong>FPT Event Team</strong>
+        </p>
+      </div>
+    `;
+
+    await this.send({
+      to: email,
+      subject: `Yêu cầu hủy sự kiện "${eventTitle}" đã được phê duyệt`,
+      html,
+    });
+  }
+
+  async sendCancellationRequestRejectedEmail(params: {
+    email: string;
+    fullName: string;
+    eventTitle: string;
+    reason: string;
+    adminNote?: string;
+  }) {
+    const { email, fullName, eventTitle, reason, adminNote } = params;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #d32f2f;">Yêu cầu hủy sự kiện bị từ chối</h2>
+        <p>Xin chào ${fullName || 'bạn'},</p>
+        <p>Rất tiếc, yêu cầu hủy sự kiện của bạn đã bị admin từ chối.</p>
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #1976d2;">${eventTitle}</h3>
+          <p><strong>Lý do bạn yêu cầu hủy:</strong> ${reason}</p>
+          ${adminNote ? `<p><strong>Ghi chú từ admin:</strong> ${adminNote}</p>` : ''}
+        </div>
+        <p><strong>Sự kiện vẫn sẽ diễn ra như dự kiến.</strong></p>
+        <p>Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với bộ phận hỗ trợ.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="color: #666; font-size: 12px;">
+          Trân trọng,<br/>
+          <strong>FPT Event Team</strong>
+        </p>
+      </div>
+    `;
+
+    await this.send({
+      to: email,
+      subject: `Yêu cầu hủy sự kiện "${eventTitle}" bị từ chối`,
+      html,
+    });
+  }
 }

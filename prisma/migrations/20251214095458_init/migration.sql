@@ -16,6 +16,9 @@ CREATE TYPE "IncidentStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'RESOLVED');
 -- CreateEnum
 CREATE TYPE "IncidentSeverity" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 
+-- CreateEnum
+CREATE TYPE "CancellationRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" SERIAL NOT NULL,
@@ -231,6 +234,21 @@ CREATE TABLE "incidents" (
     CONSTRAINT "incidents_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "event_cancellation_requests" (
+    "id" SERIAL NOT NULL,
+    "reason" TEXT NOT NULL,
+    "status" "CancellationRequestStatus" NOT NULL DEFAULT 'PENDING',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+    "reviewed_at" TIMESTAMP(3),
+    "reviewed_by" INTEGER,
+    "event_id" TEXT NOT NULL,
+    "requested_by" INTEGER NOT NULL,
+
+    CONSTRAINT "event_cancellation_requests_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "users_user_name_key" ON "users"("user_name");
 
@@ -278,6 +296,15 @@ CREATE INDEX "incidents_event_id_idx" ON "incidents"("event_id");
 
 -- CreateIndex
 CREATE INDEX "incidents_reporter_id_idx" ON "incidents"("reporter_id");
+
+-- CreateIndex
+CREATE INDEX "event_cancellation_requests_event_id_idx" ON "event_cancellation_requests"("event_id");
+
+-- CreateIndex
+CREATE INDEX "event_cancellation_requests_requested_by_idx" ON "event_cancellation_requests"("requested_by");
+
+-- CreateIndex
+CREATE INDEX "event_cancellation_requests_status_idx" ON "event_cancellation_requests"("status");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_campus_id_fkey" FOREIGN KEY ("campus_id") REFERENCES "campuses"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -344,3 +371,12 @@ ALTER TABLE "incidents" ADD CONSTRAINT "incidents_event_id_fkey" FOREIGN KEY ("e
 
 -- AddForeignKey
 ALTER TABLE "incidents" ADD CONSTRAINT "incidents_reporter_id_fkey" FOREIGN KEY ("reporter_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_cancellation_requests" ADD CONSTRAINT "event_cancellation_requests_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_cancellation_requests" ADD CONSTRAINT "event_cancellation_requests_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_cancellation_requests" ADD CONSTRAINT "event_cancellation_requests_requested_by_fkey" FOREIGN KEY ("requested_by") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

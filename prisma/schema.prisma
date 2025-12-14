@@ -47,6 +47,12 @@ enum IncidentSeverity {
   HIGH
 }
 
+enum CancellationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id                      Int        @id @default(autoincrement())
   userName                String     @unique @map("user_name")
@@ -93,6 +99,12 @@ model User {
 
   // Quan hệ: User có subscription OneSignal
   subscriptions UserSubscription[]
+
+  // Quan hệ: User yêu cầu hủy sự kiện
+  cancellationRequests EventCancellationRequest[] @relation("CancellationRequester")
+
+  // Quan hệ: Admin duyệt yêu cầu hủy sự kiện
+  reviewedCancellations EventCancellationRequest[] @relation("CancellationReviewer")
 
   @@map("users")
 }
@@ -165,6 +177,9 @@ model Event {
 
   // Notification logs
   notifications EventNotificationLog[]
+
+  // Cancellation requests
+  cancellationRequests EventCancellationRequest[]
 
   @@map("events")
 }
@@ -375,4 +390,27 @@ model Incident {
   @@index([eventId])
   @@index([reporterId])
   @@map("incidents")
+}
+
+// Yêu cầu hủy sự kiện từ organizer, cần admin phê duyệt
+model EventCancellationRequest {
+  id          Int                       @id @default(autoincrement())
+  reason      String                    @map("reason")
+  status      CancellationRequestStatus @default(PENDING) @map("status")
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  updatedAt   DateTime                  @updatedAt @map("updated_at")
+  reviewedAt  DateTime?                 @map("reviewed_at")
+  reviewedBy  Int?                      @map("reviewed_by")
+  reviewer    User?                     @relation("CancellationReviewer", fields: [reviewedBy], references: [id])
+
+  eventId String @map("event_id")
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  requestedBy Int  @map("requested_by")
+  requester   User @relation("CancellationRequester", fields: [requestedBy], references: [id])
+
+  @@index([eventId])
+  @@index([requestedBy])
+  @@index([status])
+  @@map("event_cancellation_requests")
 }
