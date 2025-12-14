@@ -2321,6 +2321,18 @@ export class EventService {
             ownerId: true,
           },
         },
+        venue: {
+          select: {
+            id: true,
+            campusId: true,
+            campus: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -2348,6 +2360,14 @@ export class EventService {
     // Check if user exists
     const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
+      include: {
+        campus: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -2364,6 +2384,31 @@ export class EventService {
     if (user.roleName !== 'staff') {
       throw new BadRequestException(
         `User với ID ${dto.userId} không phải là staff. Chỉ staff mới có thể được phân công cho sự kiện.`,
+      );
+    }
+
+    // Validate campus: staff phải cùng campus với event venue
+    if (!event.venue) {
+      throw new BadRequestException(
+        'Sự kiện chưa có địa điểm (venue). Vui lòng chọn địa điểm trước khi phân công staff.',
+      );
+    }
+
+    if (!event.venue.campusId) {
+      throw new BadRequestException(
+        'Địa điểm của sự kiện chưa có campus. Không thể phân công staff.',
+      );
+    }
+
+    if (!user.campusId) {
+      throw new BadRequestException(
+        `Staff với ID ${dto.userId} chưa được gán vào campus. Không thể phân công cho sự kiện.`,
+      );
+    }
+
+    if (event.venue.campusId !== user.campusId) {
+      throw new BadRequestException(
+        `Staff phải thuộc cùng campus với địa điểm của sự kiện. Sự kiện thuộc campus "${event.venue.campus?.name || event.venue.campusId}", nhưng staff thuộc campus "${user.campus?.name || user.campusId}".`,
       );
     }
 

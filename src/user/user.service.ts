@@ -98,6 +98,7 @@ export class UserService {
           address,
           avatar,
           status, // Set status based on role
+          isActive: status === UserStatus.APPROVED, // PENDING users phải inactive
         },
       });
 
@@ -171,6 +172,7 @@ export class UserService {
           roleName: true,
           status: true,
           isActive: true,
+          studentCardImage: true,
           createdAt: true,
           campus: {
             select: {
@@ -243,6 +245,12 @@ export class UserService {
     if (dto.password) {
       data.passwordHash = await argon2.hash(dto.password);
       delete data.password;
+    }
+
+    // Đảm bảo nếu status = PENDING thì isActive = false
+    // (status có thể được truyền vào data object nếu cần)
+    if (data.status === UserStatus.PENDING) {
+      data.isActive = false;
     }
 
     try {
@@ -434,8 +442,13 @@ export class UserService {
         where: { id },
         data: {
           status: dto.status,
-          // Nếu approve, kích hoạt tài khoản
-          isActive: dto.status === UserStatus.APPROVED ? true : user.isActive,
+          // Nếu approve, kích hoạt tài khoản; nếu pending, deactivate
+          isActive:
+            dto.status === UserStatus.APPROVED
+              ? true
+              : dto.status === UserStatus.PENDING
+                ? false
+                : user.isActive,
         },
       });
 

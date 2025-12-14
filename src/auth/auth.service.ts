@@ -83,6 +83,7 @@ export class AuthService {
           avatar,
           studentCardImage: studentCardImage || null,
           status,
+          isActive: false, // PENDING users phải inactive
         },
       });
 
@@ -254,6 +255,7 @@ export class AuthService {
           roleName: 'student',
           campusId: defaultCampus.id,
           status,
+          isActive: false, // PENDING users phải inactive
         },
       });
 
