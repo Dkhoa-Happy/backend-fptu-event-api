@@ -24,42 +24,48 @@ export class FeedbackService {
       // Kiểm tra thời gian nếu không bỏ qua validation
       if (!dto.skipTimeValidation) {
         const now = new Date();
+        const eventStartTime = new Date(event.startTime);
         const eventEndTime = new Date(event.endTime);
-        // Tính thời gian 30 phút trước khi sự kiện kết thúc
-        const thirtyMinutesBeforeEnd = new Date(
-          eventEndTime.getTime() - 30 * 60 * 1000,
-        );
 
-        // Kiểm tra: chỉ cho phép feedback khi sự kiện đã kết thúc hoặc sắp kết thúc (trong 30 phút cuối)
-        if (now < thirtyMinutesBeforeEnd) {
+        // Kiểm tra: sự kiện chưa bắt đầu
+        if (now < eventStartTime) {
           throw new BadRequestException(
-            'Chỉ có thể đánh giá sự kiện khi sự kiện sắp kết thúc hoặc đã kết thúc',
+            'Chỉ có thể đánh giá khi sự kiện đã diễn ra',
+          );
+        }
+
+        // Kiểm tra: sự kiện đã kết thúc
+        if (now > eventEndTime) {
+          throw new BadRequestException(
+            'Sự kiện đã kết thúc, không thể đánh giá',
           );
         }
       }
 
-      // Kiểm tra user đã tham gia sự kiện chưa (có ticket)
-      const ticket = await this.prisma.ticket.findFirst({
-        where: {
-          userId,
-          eventId: dto.eventId,
-        },
+      // Kiểm tra ticket có tồn tại và thuộc về user không
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: dto.ticketId },
       });
 
       if (!ticket) {
-        throw new BadRequestException('Bạn chưa đăng ký tham gia sự kiện này');
+        throw new NotFoundException('Ticket không tồn tại');
       }
 
-      // Kiểm tra user đã feedback chưa
-      const existingFeedback = await this.prisma.feedback.findFirst({
-        where: {
-          userId,
-          eventId: dto.eventId,
-        },
+      if (ticket.userId !== userId) {
+        throw new BadRequestException('Ticket này không thuộc về bạn');
+      }
+
+      if (ticket.eventId !== dto.eventId) {
+        throw new BadRequestException('Ticket không thuộc về sự kiện này');
+      }
+
+      // Kiểm tra ticket đã có feedback chưa
+      const existingFeedback = await this.prisma.feedback.findUnique({
+        where: { ticketId: dto.ticketId },
       });
 
       if (existingFeedback) {
-        throw new BadRequestException('Bạn đã đánh giá sự kiện này rồi');
+        throw new BadRequestException('Ticket này đã được đánh giá rồi');
       }
 
       const feedback = await this.prisma.feedback.create({
@@ -68,6 +74,7 @@ export class FeedbackService {
           comment: dto.comment,
           eventId: dto.eventId,
           userId,
+          ticketId: dto.ticketId,
         },
         include: {
           user: {
@@ -85,6 +92,15 @@ export class FeedbackService {
               title: true,
             },
           },
+        },
+      });
+
+      // Cập nhật checkoutTime và isFeedback cho ticket
+      await this.prisma.ticket.update({
+        where: { id: dto.ticketId },
+        data: {
+          checkoutTime: new Date(),
+          isFeedback: true,
         },
       });
 

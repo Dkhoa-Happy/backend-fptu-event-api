@@ -38,6 +38,13 @@ export class CreateFeedbackDto {
   eventId: string;
 
   @ApiProperty({
+    description: 'ID của ticket',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsUUID('4')
+  ticketId: string;
+
+  @ApiProperty({
     description:
       'Bỏ qua kiểm tra thời gian sự kiện (true: không cần sự kiện sắp kết thúc, false: chỉ được feedback khi sự kiện sắp kết thúc hoặc đã kết thúc)',
     example: false,

@@ -200,6 +200,10 @@ model Feedback {
   userId Int  @map("user_id")
   user   User @relation(fields: [userId], references: [id])
 
+  // Quan hệ 1-1: Mỗi Ticket chỉ có 1 Feedback
+  ticketId String @unique @map("ticket_id")
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+
   @@map("feedbacks")
 }
 
@@ -292,6 +296,8 @@ model Ticket {
   status      TicketStatus @default(VALID)
   bookingDate DateTime     @default(now()) @map("booking_date")
   checkinTime DateTime?    @map("checkin_time")
+  checkoutTime DateTime? @map("checkout_time")
+  isFeedback  Boolean      @default(false) @map("is_feedback")
 
   // Quan hệ: Tickets many mandatory to 1 Event
   eventId String @map("event_id")
@@ -304,6 +310,9 @@ model Ticket {
   // Quan hệ: Tickets 1 optional to many mandatory Seats (Một vé gắn với 1 ghế)
   seatId Int?  @map("seat_id")
   seat   Seat? @relation(fields: [seatId], references: [id])
+
+  // Quan hệ 1-1: Mỗi Ticket có tối đa 1 Feedback
+  feedback Feedback?
 
   // Đảm bảo mỗi user chỉ có 1 ticket cho mỗi event
   @@unique([userId, eventId], map: "tickets_user_event_unique")
