@@ -401,6 +401,77 @@ export class EmailService {
     });
   }
 
+  async sendOrganizerRequestSubmittedUser(params: {
+    email: string;
+    fullName: string;
+    organizerName: string;
+  }) {
+    const { email, fullName, organizerName } = params;
+    const subject = 'Đã nhận yêu cầu trở thành Organizer';
+    const html = `
+      <p>Chào ${fullName || 'bạn'},</p>
+      <p>Chúng tôi đã nhận được yêu cầu trở thành Organizer cho <strong>${organizerName}</strong>.</p>
+      <p>Admin sẽ xem xét và phản hồi trong thời gian sớm nhất.</p>
+      <p>Cảm ơn bạn đã đóng góp cho cộng đồng.</p>
+      <p>Trân trọng,<br/>FPT Event Team</p>
+    `;
+
+    await this.send({ to: email, subject, html });
+  }
+
+  async sendOrganizerRequestSubmittedAdmin(params: {
+    email: string;
+    requesterName: string;
+    organizerName: string;
+  }) {
+    const { email, requesterName, organizerName } = params;
+    const subject = 'Yêu cầu mới: Student muốn trở thành Organizer';
+    const html = `
+      <p>Chào admin,</p>
+      <p><strong>${requesterName}</strong> vừa gửi yêu cầu trở thành Organizer cho <strong>${organizerName}</strong>.</p>
+      <p>Vui lòng truy cập trang quản trị để duyệt yêu cầu.</p>
+      <p>Trân trọng,<br/>FPT Event Team</p>
+    `;
+
+    await this.send({ to: email, subject, html });
+  }
+
+  async sendOrganizerRequestApproved(params: {
+    email: string;
+    fullName: string;
+    organizerName: string;
+  }) {
+    const { email, fullName, organizerName } = params;
+    const subject = 'Yêu cầu Organizer đã được phê duyệt';
+    const html = `
+      <p>Chào ${fullName || 'bạn'},</p>
+      <p>Yêu cầu trở thành Organizer của bạn cho <strong>${organizerName}</strong> đã được <strong>PHÊ DUYỆT</strong>.</p>
+      <p>Tài khoản của bạn đã được nâng lên <strong>event_organizer</strong>. Bạn có thể bắt đầu tạo và quản lý sự kiện.</p>
+      <p>Trân trọng,<br/>FPT Event Team</p>
+    `;
+
+    await this.send({ to: email, subject, html });
+  }
+
+  async sendOrganizerRequestRejected(params: {
+    email: string;
+    fullName: string;
+    organizerName: string;
+    reason?: string;
+  }) {
+    const { email, fullName, organizerName, reason } = params;
+    const subject = 'Yêu cầu Organizer bị từ chối';
+    const html = `
+      <p>Chào ${fullName || 'bạn'},</p>
+      <p>Rất tiếc, yêu cầu trở thành Organizer cho <strong>${organizerName}</strong> đã bị <strong>TỪ CHỐI</strong>.</p>
+      ${reason ? `<p>Lý do: <strong>${reason}</strong></p>` : ''}
+      <p>Nếu cần bổ sung hồ sơ, bạn có thể gửi lại yêu cầu mới.</p>
+      <p>Trân trọng,<br/>FPT Event Team</p>
+    `;
+
+    await this.send({ to: email, subject, html });
+  }
+
   /**
    * Legacy: chỉ cho staff, giữ lại cho tương thích
    */

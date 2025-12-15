@@ -17,6 +17,9 @@ CREATE TYPE "IncidentStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'RESOLVED');
 CREATE TYPE "IncidentSeverity" AS ENUM ('LOW', 'MEDIUM', 'HIGH');
 
 -- CreateEnum
+CREATE TYPE "OrganizerRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+
+-- CreateEnum
 CREATE TYPE "CancellationRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
 -- CreateTable
@@ -59,6 +62,25 @@ CREATE TABLE "organizers" (
     "owner_id" INTEGER,
 
     CONSTRAINT "organizers_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "organizer_requests" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "contact_email" TEXT,
+    "logo_url" TEXT,
+    "proof_image_url" TEXT,
+    "status" "OrganizerRequestStatus" NOT NULL DEFAULT 'PENDING',
+    "reason" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reviewed_at" TIMESTAMP(3),
+    "user_id" INTEGER NOT NULL,
+    "admin_reviewer_id" INTEGER,
+    "campus_id" INTEGER,
+
+    CONSTRAINT "organizer_requests_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -347,6 +369,15 @@ ALTER TABLE "organizers" ADD CONSTRAINT "organizers_campus_id_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "organizers" ADD CONSTRAINT "organizers_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "organizer_requests" ADD CONSTRAINT "organizer_requests_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "organizer_requests" ADD CONSTRAINT "organizer_requests_admin_reviewer_id_fkey" FOREIGN KEY ("admin_reviewer_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "organizer_requests" ADD CONSTRAINT "organizer_requests_campus_id_fkey" FOREIGN KEY ("campus_id") REFERENCES "campuses"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "events" ADD CONSTRAINT "events_host_id_fkey" FOREIGN KEY ("host_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
