@@ -2553,7 +2553,9 @@ export class EventService {
       this.emailService
         .sendStaffAssignedEmail({
           email: eventStaff.user.email,
-          fullName: `${eventStaff.user.firstName} ${eventStaff.user.lastName}`.trim() || eventStaff.user.userName,
+          fullName:
+            `${eventStaff.user.firstName} ${eventStaff.user.lastName}`.trim() ||
+            eventStaff.user.userName,
           eventTitle: eventStaff.event.title,
           eventStartTime: eventStaff.event.startTime,
           eventEndTime: eventStaff.event.endTime,
@@ -2562,10 +2564,7 @@ export class EventService {
           venueLocation: eventStaff.event.venue?.location,
         })
         .catch((error) => {
-          console.error(
-            `Failed to send email to staff ${dto.userId}:`,
-            error,
-          );
+          console.error(`Failed to send email to staff ${dto.userId}:`, error);
         });
 
       return eventStaff;
