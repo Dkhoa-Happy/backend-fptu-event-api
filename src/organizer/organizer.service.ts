@@ -15,6 +15,10 @@ export class OrganizerService {
     // Validate that owner_id exists
     const owner = await this.prisma.user.findUnique({
       where: { id: dto.ownerId },
+      select: {
+        id: true,
+        campusId: true,
+      },
     });
 
     if (!owner) {
@@ -28,6 +32,13 @@ export class OrganizerService {
 
     if (!campus) {
       throw new NotFoundException(`Campus with ID ${dto.campusId} not found`);
+    }
+
+    // Ensure owner belongs to the same campus as organizer
+    if (owner.campusId !== dto.campusId) {
+      throw new BadRequestException(
+        'Owner của organizer phải thuộc cùng campus được chọn',
+      );
     }
 
     try {
