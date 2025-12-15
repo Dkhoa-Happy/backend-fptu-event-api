@@ -1082,8 +1082,16 @@ export class TicketService {
         );
       }
 
-      // Check if ticket is expired (event has ended)
+      // Check if event has started
       const now = new Date();
+      const eventStartTime = new Date(ticket.event.startTime);
+      if (now < eventStartTime) {
+        throw new BadRequestException(
+          `Chưa thể quét mã QR. Sự kiện sẽ bắt đầu lúc ${eventStartTime.toLocaleString('vi-VN')}. Vui lòng quét lại sau khi sự kiện bắt đầu.`,
+        );
+      }
+
+      // Check if ticket is expired (event has ended)
       if (new Date(ticket.event.endTime) < now && ticket.status === 'VALID') {
         // Auto-update expired ticket
         await tx.ticket.update({
@@ -1314,8 +1322,16 @@ export class TicketService {
         );
       }
 
-      // Check if ticket is expired (event has ended)
+      // Check if event has started
       const now = new Date();
+      const eventStartTime = new Date(ticket.event.startTime);
+      if (now < eventStartTime) {
+        throw new BadRequestException(
+          `Chưa thể check-in. Sự kiện sẽ bắt đầu lúc ${eventStartTime.toLocaleString('vi-VN')}. Vui lòng check-in sau khi sự kiện bắt đầu.`,
+        );
+      }
+
+      // Check if ticket is expired (event has ended)
       if (new Date(ticket.event.endTime) < now && ticket.status === 'VALID') {
         // Auto-update expired ticket
         await tx.ticket.update({
