@@ -703,6 +703,7 @@ export class EventService {
               email: true,
               firstName: true,
               lastName: true,
+              avatar: true,
             },
           },
           eventSpeakers: {
@@ -810,6 +811,7 @@ export class EventService {
             email: true,
             firstName: true,
             lastName: true,
+            avatar: true,
           },
         },
         eventSpeakers: {
