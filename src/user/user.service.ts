@@ -101,18 +101,19 @@ export class UserService {
         },
       });
 
-      // Gửi email thông tin tài khoản cho staff khi được tạo bởi admin/organizer
-      if (roleName === 'staff' && password) {
+      // Gửi email thông tin tài khoản cho mọi user khi được tạo bởi admin/organizer
+      if (password) {
         this.emailService
-          .sendStaffAccountEmail({
+          .sendAccountCreatedEmail({
             email: user.email,
             password: password, // Gửi password gốc trước khi hash
+            roleName: roleName,
             fullName:
               `${user.firstName} ${user.lastName}`.trim() || user.userName,
           })
           .catch((error) => {
             console.error(
-              `Failed to send staff account email to ${user.email}:`,
+              `Failed to send account email to ${user.email}:`,
               error,
             );
           });

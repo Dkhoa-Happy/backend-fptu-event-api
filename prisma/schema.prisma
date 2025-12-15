@@ -47,6 +47,12 @@ enum IncidentSeverity {
   HIGH
 }
 
+enum OrganizerRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum CancellationRequestStatus {
   PENDING
   APPROVED
@@ -97,6 +103,12 @@ model User {
   // Quan hệ: User là Chủ nhiệm của Organizer
   ownedOrganizers Organizer[] @relation("OrganizerOwner")
 
+  // Quan hệ: User gửi yêu cầu trở thành Organizer
+  organizerRequests OrganizerRequest[] @relation("OrganizerRequestUser")
+
+  // Quan hệ: Admin duyệt yêu cầu trở thành Organizer
+  reviewedOrganizerRequests OrganizerRequest[] @relation("OrganizerRequestReviewer")
+
   // Quan hệ: User có subscription OneSignal
   subscriptions UserSubscription[]
 
@@ -132,6 +144,33 @@ model Organizer {
   events Event[]
 
   @@map("organizers")
+}
+
+model OrganizerRequest {
+  id            Int                    @id @default(autoincrement())
+  name          String
+  description   String?
+  contactEmail  String?                @map("contact_email")
+  logoUrl       String?                @map("logo_url")
+  proofImageUrl String?                @map("proof_image_url")
+  status        OrganizerRequestStatus @default(PENDING) @map("status")
+  reason        String?
+  createdAt     DateTime               @default(now()) @map("created_at")
+  reviewedAt    DateTime?              @map("reviewed_at")
+
+  // Người gửi (student)
+  userId Int  @map("user_id")
+  user   User @relation("OrganizerRequestUser", fields: [userId], references: [id])
+
+  // Admin duyệt
+  adminReviewerId Int?  @map("admin_reviewer_id")
+  adminReviewer   User? @relation("OrganizerRequestReviewer", fields: [adminReviewerId], references: [id])
+
+  // Campus của CLB
+  campusId Int?    @map("campus_id")
+  campus   Campus? @relation(fields: [campusId], references: [id])
+
+  @@map("organizer_requests")
 }
 
 model Event {
@@ -287,17 +326,20 @@ model Campus {
   // Quan hệ: 1 Campus -> Many Organizers (Optional)
   organizers Organizer[]
 
+  // Quan hệ: 1 Campus -> Many OrganizerRequests (Optional)
+  organizerRequests OrganizerRequest[]
+
   @@map("campuses")
 }
 
 model Ticket {
-  id          String       @id @default(uuid())
-  qrCode      String       @unique @map("qr_code")
-  status      TicketStatus @default(VALID)
-  bookingDate DateTime     @default(now()) @map("booking_date")
-  checkinTime DateTime?    @map("checkin_time")
-  checkoutTime DateTime? @map("checkout_time")
-  isFeedback  Boolean      @default(false) @map("is_feedback")
+  id           String       @id @default(uuid())
+  qrCode       String       @unique @map("qr_code")
+  status       TicketStatus @default(VALID)
+  bookingDate  DateTime     @default(now()) @map("booking_date")
+  checkinTime  DateTime?    @map("checkin_time")
+  checkoutTime DateTime?    @map("checkout_time")
+  isFeedback   Boolean      @default(false) @map("is_feedback")
 
   // Quan hệ: Tickets many mandatory to 1 Event
   eventId String @map("event_id")
@@ -406,14 +448,14 @@ model Incident {
 
 // Yêu cầu hủy sự kiện từ organizer, cần admin phê duyệt
 model EventCancellationRequest {
-  id          Int                       @id @default(autoincrement())
-  reason      String                    @map("reason")
-  status      CancellationRequestStatus @default(PENDING) @map("status")
-  createdAt   DateTime                  @default(now()) @map("created_at")
-  updatedAt   DateTime                  @updatedAt @map("updated_at")
-  reviewedAt  DateTime?                 @map("reviewed_at")
-  reviewedBy  Int?                      @map("reviewed_by")
-  reviewer    User?                     @relation("CancellationReviewer", fields: [reviewedBy], references: [id])
+  id         Int                       @id @default(autoincrement())
+  reason     String                    @map("reason")
+  status     CancellationRequestStatus @default(PENDING) @map("status")
+  createdAt  DateTime                  @default(now()) @map("created_at")
+  updatedAt  DateTime                  @updatedAt @map("updated_at")
+  reviewedAt DateTime?                 @map("reviewed_at")
+  reviewedBy Int?                      @map("reviewed_by")
+  reviewer   User?                     @relation("CancellationReviewer", fields: [reviewedBy], references: [id])
 
   eventId String @map("event_id")
   event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -429,14 +471,14 @@ model EventCancellationRequest {
 
 // Lưu lịch sử thông báo đã gửi cho từng user
 model Notification {
-  id        Int      @id @default(autoincrement())
-  type      String   @map("type")
-  title     String   @map("title")
-  content   String   @map("content")
-  data      Json?    @map("data") // Lưu data payload (eventId, requestId, etc.)
-  isRead    Boolean  @default(false) @map("is_read")
+  id        Int       @id @default(autoincrement())
+  type      String    @map("type")
+  title     String    @map("title")
+  content   String    @map("content")
+  data      Json?     @map("data") // Lưu data payload (eventId, requestId, etc.)
+  isRead    Boolean   @default(false) @map("is_read")
   readAt    DateTime? @map("read_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   userId Int  @map("user_id")
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
