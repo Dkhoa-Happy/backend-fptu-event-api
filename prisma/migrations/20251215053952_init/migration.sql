@@ -92,6 +92,7 @@ CREATE TABLE "feedbacks" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "event_id" TEXT NOT NULL,
     "user_id" INTEGER NOT NULL,
+    "ticket_id" TEXT NOT NULL,
 
     CONSTRAINT "feedbacks_pkey" PRIMARY KEY ("id")
 );
@@ -167,6 +168,8 @@ CREATE TABLE "tickets" (
     "status" "TicketStatus" NOT NULL DEFAULT 'VALID',
     "booking_date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "checkin_time" TIMESTAMP(3),
+    "checkout_time" TIMESTAMP(3),
+    "is_feedback" BOOLEAN NOT NULL DEFAULT false,
     "event_id" TEXT NOT NULL,
     "user_id" INTEGER NOT NULL,
     "seat_id" INTEGER,
@@ -277,6 +280,9 @@ CREATE UNIQUE INDEX "users_student_code_key" ON "users"("student_code");
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "feedbacks_ticket_id_key" ON "feedbacks"("ticket_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "campuses_name_key" ON "campuses"("name");
 
 -- CreateIndex
@@ -356,6 +362,9 @@ ALTER TABLE "feedbacks" ADD CONSTRAINT "feedbacks_event_id_fkey" FOREIGN KEY ("e
 
 -- AddForeignKey
 ALTER TABLE "feedbacks" ADD CONSTRAINT "feedbacks_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "feedbacks" ADD CONSTRAINT "feedbacks_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "tickets"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "event_speakers" ADD CONSTRAINT "event_speakers_speaker_id_fkey" FOREIGN KEY ("speaker_id") REFERENCES "speakers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
