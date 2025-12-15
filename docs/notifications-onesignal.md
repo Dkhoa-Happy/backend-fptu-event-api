@@ -2,20 +2,21 @@
 
 ## 📋 Tổng quan các Notification Types
 
-| Type                    | Mô tả                              | Gửi đến                     | Data Fields                                         | Kèm Email |
-| ----------------------- | ---------------------------------- | --------------------------- | --------------------------------------------------- | --------- |
-| `staff_assigned`        | Staff được assign vào event        | Staff được assign           | `eventId`, `startTime`, `endTime`                   | ❌        |
-| `event_created`         | Event được tạo thành công          | Organizer owner             | `eventId`, `status`                                 | ❌        |
-| `event_approved`        | Event được admin approve           | Organizer owner             | `eventId`, `status`                                 | ❌        |
-| `event_rejected`        | Event bị admin reject              | Organizer owner             | `eventId`, `status`                                 | ❌        |
-| `event_cancelled`       | Event bị hủy (đã PUBLISHED)        | Tất cả users đã đăng ký     | `eventId`, `title`                                  | ✅        |
-| `event_time_changed`    | Thời gian event thay đổi           | Tất cả users đã đăng ký     | `eventId`, `title`                                  | ✅        |
-| `one_day`               | Event sắp diễn ra trong 1 ngày     | Tất cả users (đã subscribe) | `eventId`, `startTime`                              | ❌        |
-| `thirty_min`            | Event sắp diễn ra trong 30 phút    | Tất cả users (đã subscribe) | `eventId`, `startTime`                              | ❌        |
-| `incident_reported`     | Staff báo cáo sự cố                | Admin + Organizer owner     | `eventId`, `incidentId`, `severity`, `reporterName` | ❌        |
-| `cancellation_request`  | Organizer yêu cầu hủy sự kiện      | Tất cả admin                | `eventId`, `requestId`, `eventTitle`, `reason`      | ❌        |
-| `cancellation_approved` | Yêu cầu hủy sự kiện được phê duyệt | Organizer owner             | `eventId`, `eventTitle`                             | ✅        |
-| `cancellation_rejected` | Yêu cầu hủy sự kiện bị từ chối     | Organizer owner             | `eventId`, `eventTitle`, `adminNote`                | ✅        |
+| Type                     | Mô tả                              | Gửi đến                     | Data Fields                                         | Kèm Email |
+| ------------------------ | ---------------------------------- | --------------------------- | --------------------------------------------------- | --------- |
+| `staff_assigned`         | Staff được assign vào event        | Staff được assign           | `eventId`, `startTime`, `endTime`                   | ❌        |
+| `event_created`          | Event được tạo thành công          | Organizer owner             | `eventId`, `status`                                 | ❌        |
+| `event_pending_approval` | Event mới cần phê duyệt            | Tất cả admin                | `eventId`, `status`, `eventTitle`, `organizerName`  | ❌        |
+| `event_approved`         | Event được admin approve           | Organizer owner             | `eventId`, `status`                                 | ❌        |
+| `event_rejected`         | Event bị admin reject              | Organizer owner             | `eventId`, `status`                                 | ❌        |
+| `event_cancelled`        | Event bị hủy (đã PUBLISHED)        | Tất cả users đã đăng ký     | `eventId`, `title`                                  | ✅        |
+| `event_time_changed`     | Thời gian event thay đổi           | Tất cả users đã đăng ký     | `eventId`, `title`                                  | ✅        |
+| `one_day`                | Event sắp diễn ra trong 1 ngày     | Tất cả users (đã subscribe) | `eventId`, `startTime`                              | ❌        |
+| `thirty_min`             | Event sắp diễn ra trong 30 phút    | Tất cả users (đã subscribe) | `eventId`, `startTime`                              | ❌        |
+| `incident_reported`      | Staff báo cáo sự cố                | Admin + Organizer owner     | `eventId`, `incidentId`, `severity`, `reporterName` | ❌        |
+| `cancellation_request`   | Organizer yêu cầu hủy sự kiện      | Tất cả admin                | `eventId`, `requestId`, `eventTitle`, `reason`      | ❌        |
+| `cancellation_approved`  | Yêu cầu hủy sự kiện được phê duyệt | Organizer owner             | `eventId`, `eventTitle`                             | ✅        |
+| `cancellation_rejected`  | Yêu cầu hủy sự kiện bị từ chối     | Organizer owner             | `eventId`, `eventTitle`, `adminNote`                | ✅        |
 
 ## Các loại thông báo
 
@@ -44,21 +45,29 @@ Hệ thống hỗ trợ các loại thông báo sau:
 - **Type**: `event_created`
 - **Nội dung**: "Sự kiện của bạn đã được tạo thành công - đang chờ admin phê duyệt"
 
-### 4. Thông báo khi Admin approve event
+### 4. Thông báo cho Admin khi có event mới cần phê duyệt
+
+- **Trigger**: Khi organizer tạo event thành công với status PENDING
+- **Gửi đến**: Tất cả admin trong hệ thống
+- **Type**: `event_pending_approval`
+- **Nội dung**: "[Tên organizer] đã tạo sự kiện [tên sự kiện] và đang chờ phê duyệt"
+- **Lưu ý**: Admin cần vào trang quản lý để xem chi tiết và phê duyệt/từ chối
+
+### 5. Thông báo khi Admin approve event
 
 - **Trigger**: Khi admin approve event (PENDING → PUBLISHED)
 - **Gửi đến**: Organizer owner
 - **Type**: `event_approved`
 - **Nội dung**: "Sự kiện của bạn đã được phê duyệt - đã được công bố"
 
-### 5. Thông báo khi Admin reject event
+### 6. Thông báo khi Admin reject event
 
 - **Trigger**: Khi admin reject event (PENDING → CANCELED)
 - **Gửi đến**: Organizer owner
 - **Type**: `event_rejected`
 - **Nội dung**: "Sự kiện của bạn đã bị từ chối"
 
-### 6. Thông báo khi sự kiện bị hủy
+### 7. Thông báo khi sự kiện bị hủy
 
 - **Trigger**: Khi admin hoặc organizer hủy sự kiện đã PUBLISHED
 - **Gửi đến**: Tất cả users đã đăng ký sự kiện (có ticket VALID)
@@ -66,7 +75,7 @@ Hệ thống hỗ trợ các loại thông báo sau:
 - **Nội dung**: "Sự kiện [tên] đã bị hủy. Vé của bạn đã được tự động hủy."
 - **Lưu ý**: Kèm theo email thông báo chi tiết
 
-### 7. Thông báo khi thời gian sự kiện thay đổi
+### 8. Thông báo khi thời gian sự kiện thay đổi
 
 - **Trigger**: Khi organizer thay đổi startTime hoặc endTime của sự kiện đã PUBLISHED
 - **Gửi đến**: Tất cả users đã đăng ký sự kiện (có ticket VALID)
@@ -74,7 +83,7 @@ Hệ thống hỗ trợ các loại thông báo sau:
 - **Nội dung**: "Sự kiện [tên] đã thay đổi thời gian (thời gian bắt đầu/kết thúc). Vui lòng kiểm tra email để biết chi tiết."
 - **Lưu ý**: Kèm theo email thông báo chi tiết với thời gian cũ và mới
 
-### 8. Thông báo khi Organizer yêu cầu hủy sự kiện
+### 9. Thông báo khi Organizer yêu cầu hủy sự kiện
 
 - **Trigger**: Khi organizer yêu cầu hủy sự kiện đã PUBLISHED (với lý do)
 - **Gửi đến**: Tất cả admin trong hệ thống
@@ -82,7 +91,7 @@ Hệ thống hỗ trợ các loại thông báo sau:
 - **Nội dung**: "[Tên organizer] yêu cầu hủy sự kiện [tên sự kiện]"
 - **Lưu ý**: Admin cần vào trang quản lý để xem chi tiết và phê duyệt/từ chối
 
-### 9. Thông báo khi yêu cầu hủy sự kiện được phê duyệt
+### 10. Thông báo khi yêu cầu hủy sự kiện được phê duyệt
 
 - **Trigger**: Khi admin phê duyệt yêu cầu hủy sự kiện từ organizer
 - **Gửi đến**: Organizer owner (người yêu cầu hủy)
@@ -90,7 +99,7 @@ Hệ thống hỗ trợ các loại thông báo sau:
 - **Nội dung**: "Yêu cầu hủy sự kiện [tên] đã được admin phê duyệt. Sự kiện đã được hủy."
 - **Lưu ý**: Kèm theo email thông báo chi tiết. Sự kiện sẽ được tự động hủy và gửi thông báo đến tất cả người tham gia
 
-### 10. Thông báo khi yêu cầu hủy sự kiện bị từ chối
+### 11. Thông báo khi yêu cầu hủy sự kiện bị từ chối
 
 - **Trigger**: Khi admin từ chối yêu cầu hủy sự kiện từ organizer
 - **Gửi đến**: Organizer owner (người yêu cầu hủy)
@@ -552,12 +561,13 @@ function App() {
 ```json
 {
   "eventId": "uuid-of-event",
-  "type": "staff_assigned" | "event_created" | "event_approved" | "event_rejected" | "event_cancelled" | "event_time_changed" | "one_day" | "thirty_min" | "incident_reported" | "cancellation_request" | "cancellation_approved" | "cancellation_rejected",
+  "type": "staff_assigned" | "event_created" | "event_pending_approval" | "event_approved" | "event_rejected" | "event_cancelled" | "event_time_changed" | "one_day" | "thirty_min" | "incident_reported" | "cancellation_request" | "cancellation_approved" | "cancellation_rejected",
   "startTime": "2025-12-15T09:00:00Z",  // Có trong staff_assigned, one_day, thirty_min
   "endTime": "2025-12-15T17:00:00Z",    // Có trong staff_assigned
-  "status": "PENDING" | "PUBLISHED" | "CANCELED",  // Có trong event_created, event_approved, event_rejected
+  "status": "PENDING" | "PUBLISHED" | "CANCELED",  // Có trong event_created, event_pending_approval, event_approved, event_rejected
   "title": "Event Title",  // Có trong event_cancelled, event_time_changed
-  "eventTitle": "Event Title",  // Có trong cancellation_request, cancellation_approved, cancellation_rejected
+  "eventTitle": "Event Title",  // Có trong event_pending_approval, cancellation_request, cancellation_approved, cancellation_rejected
+  "organizerName": "Organizer Name",  // Có trong event_pending_approval
   "requestId": 123,  // Có trong cancellation_request
   "reason": "Lý do hủy sự kiện",  // Có trong cancellation_request
   "adminNote": "Ghi chú từ admin",  // Có trong cancellation_rejected (optional)
@@ -569,20 +579,21 @@ function App() {
 
 ### Các loại Notification Type:
 
-| Type                    | Mô tả                             | Gửi đến                 | Data fields                                         |
-| ----------------------- | --------------------------------- | ----------------------- | --------------------------------------------------- |
-| `staff_assigned`        | Staff được assign vào event       | Staff được assign       | `eventId`, `startTime`, `endTime`                   |
-| `event_created`         | Event được tạo thành công         | Organizer owner         | `eventId`, `status`                                 |
-| `event_approved`        | Event được admin approve          | Organizer owner         | `eventId`, `status`                                 |
-| `event_rejected`        | Event bị admin reject             | Organizer owner         | `eventId`, `status`                                 |
-| `event_cancelled`       | Event bị hủy (đã PUBLISHED)       | Tất cả users đã đăng ký | `eventId`, `title`                                  |
-| `event_time_changed`    | Thời gian event thay đổi          | Tất cả users đã đăng ký | `eventId`, `title`                                  |
-| `one_day`               | Event sắp diễn ra trong 1 ngày    | Tất cả users            | `eventId`, `startTime`                              |
-| `thirty_min`            | Event sắp diễn ra trong 30 phút   | Tất cả users            | `eventId`, `startTime`                              |
-| `incident_reported`     | Staff báo cáo sự cố trước sự kiện | Admin + Organizer owner | `eventId`, `incidentId`, `severity`, `reporterName` |
-| `cancellation_request`  | Organizer yêu cầu hủy sự kiện     | Tất cả admin            | `eventId`, `requestId`, `eventTitle`, `reason`      |
-| `cancellation_approved` | Yêu cầu hủy được phê duyệt        | Organizer owner         | `eventId`, `eventTitle`                             |
-| `cancellation_rejected` | Yêu cầu hủy bị từ chối            | Organizer owner         | `eventId`, `eventTitle`, `adminNote`                |
+| Type                     | Mô tả                             | Gửi đến                 | Data fields                                         |
+| ------------------------ | --------------------------------- | ----------------------- | --------------------------------------------------- |
+| `staff_assigned`         | Staff được assign vào event       | Staff được assign       | `eventId`, `startTime`, `endTime`                   |
+| `event_created`          | Event được tạo thành công         | Organizer owner         | `eventId`, `status`                                 |
+| `event_pending_approval` | Event mới cần phê duyệt           | Tất cả admin            | `eventId`, `status`, `eventTitle`, `organizerName`  |
+| `event_approved`         | Event được admin approve          | Organizer owner         | `eventId`, `status`                                 |
+| `event_rejected`         | Event bị admin reject             | Organizer owner         | `eventId`, `status`                                 |
+| `event_cancelled`        | Event bị hủy (đã PUBLISHED)       | Tất cả users đã đăng ký | `eventId`, `title`                                  |
+| `event_time_changed`     | Thời gian event thay đổi          | Tất cả users đã đăng ký | `eventId`, `title`                                  |
+| `one_day`                | Event sắp diễn ra trong 1 ngày    | Tất cả users            | `eventId`, `startTime`                              |
+| `thirty_min`             | Event sắp diễn ra trong 30 phút   | Tất cả users            | `eventId`, `startTime`                              |
+| `incident_reported`      | Staff báo cáo sự cố trước sự kiện | Admin + Organizer owner | `eventId`, `incidentId`, `severity`, `reporterName` |
+| `cancellation_request`   | Organizer yêu cầu hủy sự kiện     | Tất cả admin            | `eventId`, `requestId`, `eventTitle`, `reason`      |
+| `cancellation_approved`  | Yêu cầu hủy được phê duyệt        | Organizer owner         | `eventId`, `eventTitle`                             |
+| `cancellation_rejected`  | Yêu cầu hủy bị từ chối            | Organizer owner         | `eventId`, `eventTitle`, `adminNote`                |
 
 ### Ví dụ xử lý trong Frontend:
 
@@ -617,6 +628,16 @@ OneSignal.addClickListener((event) => {
         'Sự kiện của bạn đã bị từ chối. Vui lòng kiểm tra lại thông tin.',
       );
       navigateToEvent(data.eventId);
+      break;
+
+    case 'event_pending_approval':
+      // Thông báo event mới cần phê duyệt (chỉ admin nhận)
+      showToast(
+        `Có sự kiện mới "${data.eventTitle || 'này'}" từ ${data.organizerName || 'organizer'} cần phê duyệt`,
+        'warning',
+      );
+      // Điều hướng đến trang quản lý events để phê duyệt
+      navigateToEventManagement(data.eventId);
       break;
 
     case 'incident_reported':
@@ -657,6 +678,18 @@ OneSignal.addClickListener((event) => {
         'info',
       );
       navigateToEvent(data.eventId);
+      break;
+
+    case 'event_pending_approval':
+      // Thông báo event mới cần phê duyệt (chỉ admin nhận)
+      navigation.navigate('EventManagement', {
+        eventId: data.eventId,
+        status: 'PENDING',
+      });
+      showAlert(
+        'Sự kiện mới cần phê duyệt',
+        `Có sự kiện mới "${data.eventTitle || 'này'}" từ ${data.organizerName || 'organizer'} cần phê duyệt.`,
+      );
       break;
 
     case 'cancellation_request':
@@ -719,6 +752,18 @@ OneSignal.setNotificationOpenedHandler((event) => {
           eventId: data.eventId,
           status: data.status,
         });
+        break;
+
+      case 'event_pending_approval':
+        // Admin notification - điều hướng đến trang quản lý events để phê duyệt
+        navigation.navigate('EventManagement', {
+          eventId: data.eventId,
+          status: 'PENDING',
+        });
+        showAlert(
+          'Sự kiện mới cần phê duyệt',
+          `Có sự kiện mới "${data.eventTitle || 'này'}" từ ${data.organizerName || 'organizer'} cần phê duyệt.`,
+        );
         break;
 
       case 'incident_reported':
@@ -1326,6 +1371,7 @@ Một số thông báo được gửi kèm theo email để cung cấp thông ti
 
 ### Cho Admin:
 
+- **`event_pending_approval`**: Nhận khi organizer tạo sự kiện mới ở trạng thái PENDING (cần phê duyệt)
 - **`cancellation_request`**: Nhận khi organizer yêu cầu hủy sự kiện (cần phê duyệt)
 
 ## 📚 Lịch sử thông báo (Notification History)
@@ -1442,6 +1488,9 @@ function NotificationList() {
         case 'cancellation_approved':
         case 'cancellation_rejected':
           navigateToEvent(data.eventId);
+          break;
+        case 'event_pending_approval':
+          navigateToEventManagement(data.eventId);
           break;
         case 'cancellation_request':
           navigateToCancellationRequests(data.requestId);

@@ -542,6 +542,25 @@ export class EventService {
           });
       }
 
+      // Gửi thông báo cho admin khi có sự kiện mới ở trạng thái PENDING cần phê duyệt
+      if (event && event.organizer) {
+        this.notificationService
+          .notifyAdminNewEventPending(
+            {
+              id: event.id,
+              title: event.title,
+              status: 'PENDING',
+            },
+            event.organizer.name,
+          )
+          .catch((error) => {
+            console.error(
+              `Failed to send notification to admin for new event ${event.id}:`,
+              error,
+            );
+          });
+      }
+
       return {
         ...event,
         checkinCount: 0, // mới tạo nên chưa có check-in

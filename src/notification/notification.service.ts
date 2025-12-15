@@ -374,6 +374,100 @@ export class NotificationService {
   }
 
   /**
+   * Gửi thông báo cho admin khi có sự kiện mới ở trạng thái PENDING cần phê duyệt
+   * @param event - Thông tin event
+   * @param organizerName - Tên của organizer tạo event
+   */
+  async notifyAdminNewEventPending(
+    event: {
+      id: string;
+      title: string;
+      status: string;
+    },
+    organizerName: string,
+  ) {
+    if (!this.oneSignalClient || !this.appId) {
+      this.logger.warn(
+        'OneSignal config missing. Skipping admin new event notification.',
+      );
+      return;
+    }
+
+    // Lấy subscription của tất cả admin
+    const adminSubs = await this.prisma.userSubscription.findMany({
+      where: {
+        user: {
+          roleName: 'admin',
+          isActive: true,
+        },
+      },
+      select: { subscriptionId: true },
+    });
+
+    if (adminSubs.length === 0) {
+      this.logger.warn(
+        `No admin subscriptions found for new event ${event.id}. Skipping notification.`,
+      );
+      return;
+    }
+
+    const heading = 'Có sự kiện mới cần phê duyệt';
+    const content = `${organizerName} đã tạo sự kiện "${event.title}" và đang chờ phê duyệt`;
+
+    const playerIds = adminSubs.map((sub) => sub.subscriptionId);
+
+    const payload: OneSignal.Notification = {
+      app_id: this.appId,
+      include_subscription_ids: playerIds,
+      headings: { en: heading, vi: heading },
+      contents: { en: content, vi: content },
+      data: {
+        type: 'event_pending_approval',
+        eventId: event.id,
+        status: event.status,
+        eventTitle: event.title,
+        organizerName: organizerName,
+      },
+    } as any;
+
+    try {
+      await this.oneSignalClient.createNotification(payload);
+      this.logger.log(
+        `Sent new event pending notification to ${adminSubs.length} admin(s) for event ${event.id}`,
+      );
+
+      // Lưu notification vào database cho tất cả admin
+      const adminUsers = await this.prisma.user.findMany({
+        where: {
+          roleName: 'admin',
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      for (const admin of adminUsers) {
+        await this.saveNotification({
+          userId: admin.id,
+          type: 'event_pending_approval',
+          title: heading,
+          content: content,
+          data: {
+            type: 'event_pending_approval',
+            eventId: event.id,
+            status: event.status,
+            eventTitle: event.title,
+            organizerName: organizerName,
+          },
+        });
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to send new event pending notification for event ${event.id}: ${String(error)}`,
+      );
+    }
+  }
+
+  /**
    * Gửi thông báo khi staff báo cáo sự cố trước sự kiện
    * Gửi cho: tất cả admin + organizer owner của event (nếu có)
    */
