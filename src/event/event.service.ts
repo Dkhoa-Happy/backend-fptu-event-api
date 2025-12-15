@@ -2520,6 +2520,12 @@ export class EventService {
                   name: true,
                 },
               },
+              venue: {
+                select: {
+                  name: true,
+                  location: true,
+                },
+              },
             },
           },
         },
@@ -2539,6 +2545,25 @@ export class EventService {
           // Log lỗi nhưng không throw để không ảnh hưởng đến response
           console.error(
             `Failed to send notification to staff ${dto.userId}:`,
+            error,
+          );
+        });
+
+      // Gửi email thông báo cho staff khi được assign vào event
+      this.emailService
+        .sendStaffAssignedEmail({
+          email: eventStaff.user.email,
+          fullName: `${eventStaff.user.firstName} ${eventStaff.user.lastName}`.trim() || eventStaff.user.userName,
+          eventTitle: eventStaff.event.title,
+          eventStartTime: eventStaff.event.startTime,
+          eventEndTime: eventStaff.event.endTime,
+          organizerName: eventStaff.event.organizer?.name,
+          venueName: eventStaff.event.venue?.name,
+          venueLocation: eventStaff.event.venue?.location,
+        })
+        .catch((error) => {
+          console.error(
+            `Failed to send email to staff ${dto.userId}:`,
             error,
           );
         });

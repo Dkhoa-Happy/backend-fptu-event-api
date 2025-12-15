@@ -79,9 +79,8 @@ export class UserService {
     try {
       const passwordHash = await argon2.hash(password);
 
-      // Admin accounts are automatically APPROVED, others are PENDING
-      const status =
-        roleName === UserRole.admin ? UserStatus.APPROVED : UserStatus.PENDING;
+      // Tài khoản tạo qua API này luôn được APPROVED (admin/organizer tạo cho staff)
+      const status = UserStatus.APPROVED;
 
       const user = await this.prisma.user.create({
         data: {
@@ -97,10 +96,27 @@ export class UserService {
           gender,
           address,
           avatar,
-          status, // Set status based on role
-          isActive: status === UserStatus.APPROVED, // PENDING users phải inactive
+          status,
+          isActive: true, // APPROVED users luôn active
         },
       });
+
+      // Gửi email thông tin tài khoản cho staff khi được tạo bởi admin/organizer
+      if (roleName === 'staff' && password) {
+        this.emailService
+          .sendStaffAccountEmail({
+            email: user.email,
+            password: password, // Gửi password gốc trước khi hash
+            fullName:
+              `${user.firstName} ${user.lastName}`.trim() || user.userName,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to send staff account email to ${user.email}:`,
+              error,
+            );
+          });
+      }
 
       return this.excludePassword(user);
     } catch (error: unknown) {

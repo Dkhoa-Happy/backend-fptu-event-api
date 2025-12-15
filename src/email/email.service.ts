@@ -357,4 +357,115 @@ export class EmailService {
       html,
     });
   }
+
+  /**
+   * Gửi email thông tin tài khoản cho staff khi được tạo bởi organizer/admin
+   */
+  async sendStaffAccountEmail(params: {
+    email: string;
+    password: string;
+    fullName?: string;
+  }) {
+    const { email, password, fullName } = params;
+    const subject = 'Thông tin tài khoản Staff của bạn';
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1976d2;">Chào mừng đến với FPT Event System</h2>
+        <p>Xin chào ${fullName || 'bạn'},</p>
+        <p>Tài khoản Staff của bạn đã được tạo thành công. Dưới đây là thông tin đăng nhập:</p>
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <p style="margin: 10px 0;"><strong>Email đăng nhập:</strong> <code style="background-color: #fff; padding: 2px 6px; border-radius: 3px;">${email}</code></p>
+          <p style="margin: 10px 0;"><strong>Mật khẩu:</strong> <code style="background-color: #fff; padding: 2px 6px; border-radius: 3px;">${password}</code></p>
+        </div>
+        <p><strong>⚠️ Lưu ý quan trọng:</strong></p>
+        <ul>
+          <li>Vui lòng đổi mật khẩu sau lần đăng nhập đầu tiên để bảo mật tài khoản</li>
+          <li>Không chia sẻ thông tin đăng nhập với người khác</li>
+          <li>Nếu bạn không yêu cầu tài khoản này, vui lòng liên hệ bộ phận hỗ trợ ngay lập tức</li>
+        </ul>
+        <p>Bạn có thể đăng nhập tại: <a href="${process.env.FRONTEND_URL || 'https://your-frontend-url.com'}/login" style="color: #1976d2;">Đăng nhập</a></p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="color: #666; font-size: 12px;">
+          Trân trọng,<br/>
+          <strong>FPT Event Team</strong>
+        </p>
+      </div>
+    `;
+
+    await this.send({
+      to: email,
+      subject,
+      html,
+    });
+  }
+
+  /**
+   * Gửi email thông báo cho staff khi được assign vào event
+   */
+  async sendStaffAssignedEmail(params: {
+    email: string;
+    fullName: string;
+    eventTitle: string;
+    eventStartTime: Date;
+    eventEndTime: Date;
+    organizerName?: string;
+    venueName?: string;
+    venueLocation?: string;
+  }) {
+    const {
+      email,
+      fullName,
+      eventTitle,
+      eventStartTime,
+      eventEndTime,
+      organizerName,
+      venueName,
+      venueLocation,
+    } = params;
+    const startTimeStr = new Date(eventStartTime).toLocaleString('vi-VN', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+    });
+    const endTimeStr = new Date(eventEndTime).toLocaleString('vi-VN', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+    });
+
+    const subject = `Bạn đã được phân công làm staff cho sự kiện: ${eventTitle}`;
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1976d2;">Thông báo phân công Staff</h2>
+        <p>Xin chào ${fullName || 'bạn'},</p>
+        <p>Bạn đã được phân công làm staff cho sự kiện sau:</p>
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #1976d2;">${eventTitle}</h3>
+          <p><strong>Thời gian bắt đầu:</strong> ${startTimeStr}</p>
+          <p><strong>Thời gian kết thúc:</strong> ${endTimeStr}</p>
+          ${organizerName ? `<p><strong>Organizer:</strong> ${organizerName}</p>` : ''}
+          ${venueName ? `<p><strong>Địa điểm:</strong> ${venueName}${venueLocation ? ` - ${venueLocation}` : ''}</p>` : ''}
+        </div>
+        <p><strong>Nhiệm vụ của bạn:</strong></p>
+        <ul>
+          <li>Thực hiện check-in cho người tham dự bằng cách quét mã QR</li>
+          <li>Hỗ trợ check-in thủ công khi cần thiết</li>
+          <li>Có mặt tại địa điểm sự kiện trước thời gian bắt đầu ít nhất 30 phút</li>
+        </ul>
+        <p>Vui lòng kiểm tra thông tin sự kiện và chuẩn bị sẵn sàng cho nhiệm vụ của mình.</p>
+        <p>Nếu có bất kỳ câu hỏi nào, vui lòng liên hệ với organizer hoặc bộ phận hỗ trợ.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="color: #666; font-size: 12px;">
+          Trân trọng,<br/>
+          <strong>FPT Event Team</strong>
+        </p>
+      </div>
+    `;
+
+    await this.send({
+      to: email,
+      subject,
+      html,
+    });
+  }
 }
