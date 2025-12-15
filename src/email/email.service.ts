@@ -361,6 +361,49 @@ export class EmailService {
   /**
    * Gửi email thông tin tài khoản cho staff khi được tạo bởi organizer/admin
    */
+  async sendAccountCreatedEmail(params: {
+    email: string;
+    password: string;
+    roleName?: string;
+    fullName?: string;
+  }) {
+    const { email, password, roleName, fullName } = params;
+    const subject = 'Thông tin tài khoản của bạn';
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1976d2;">Chào mừng đến với FPT Event System</h2>
+        <p>Xin chào ${fullName || 'bạn'},</p>
+        <p>Tài khoản${roleName ? ` (${roleName})` : ''} của bạn đã được tạo thành công. Dưới đây là thông tin đăng nhập:</p>
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <p style="margin: 10px 0;"><strong>Email đăng nhập:</strong> <code style="background-color: #fff; padding: 2px 6px; border-radius: 3px;">${email}</code></p>
+          <p style="margin: 10px 0;"><strong>Mật khẩu:</strong> <code style="background-color: #fff; padding: 2px 6px; border-radius: 3px;">${password}</code></p>
+        </div>
+        <p><strong>⚠️ Lưu ý quan trọng:</strong></p>
+        <ul>
+          <li>Vui lòng đổi mật khẩu sau lần đăng nhập đầu tiên để bảo mật tài khoản</li>
+          <li>Không chia sẻ thông tin đăng nhập với người khác</li>
+          <li>Nếu bạn không yêu cầu tài khoản này, vui lòng liên hệ bộ phận hỗ trợ ngay lập tức</li>
+        </ul>
+        <p>Bạn có thể đăng nhập tại: <a href="${process.env.FRONTEND_URL || 'https://your-frontend-url.com'}/login" style="color: #1976d2;">Đăng nhập</a></p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="color: #666; font-size: 12px;">
+          Trân trọng,<br/>
+          <strong>FPT Event Team</strong>
+        </p>
+      </div>
+    `;
+
+    await this.send({
+      to: email,
+      subject,
+      html,
+    });
+  }
+
+  /**
+   * Legacy: chỉ cho staff, giữ lại cho tương thích
+   */
   async sendStaffAccountEmail(params: {
     email: string;
     password: string;
