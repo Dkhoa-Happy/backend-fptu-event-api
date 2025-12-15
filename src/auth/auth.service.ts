@@ -137,6 +137,13 @@ export class AuthService {
       }
     }
 
+    // Chặn login nếu tài khoản bị vô hiệu hóa
+    if (!user.isActive) {
+      throw new UnauthorizedException(
+        'Tài khoản đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.',
+      );
+    }
+
     // User đăng nhập bằng Google không có passwordHash
     if (!user.passwordHash) {
       throw new UnauthorizedException(
@@ -194,6 +201,12 @@ export class AuthService {
             'Your account has been rejected. Please contact administrator.',
           );
         }
+      }
+
+      if (!user.isActive) {
+        throw new UnauthorizedException(
+          'Your account has been deactivated. Please contact administrator.',
+        );
       }
 
       // User đã tồn tại - cập nhật thông tin Google nếu cần
