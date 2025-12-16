@@ -151,6 +151,8 @@ model OrganizerRequest {
   name          String
   description   String?
   contactEmail  String?                @map("contact_email")
+  /// Danh sách email thành viên CLB được đề xuất làm staff khi request được duyệt
+  memberEmails  String[]               @default([]) @map("member_emails")
   logoUrl       String?                @map("logo_url")
   proofImageUrl String?                @map("proof_image_url")
   status        OrganizerRequestStatus @default(PENDING) @map("status")

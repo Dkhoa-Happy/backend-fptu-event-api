@@ -515,6 +515,44 @@ export class EmailService {
   }
 
   /**
+   * Thông báo khi tài khoản hiện có được nâng quyền lên Staff (không gửi mật khẩu)
+   */
+  async sendStaffRoleUpgradedEmail(params: {
+    email: string;
+    fullName?: string;
+    organizerName?: string;
+  }) {
+    const { email, fullName, organizerName } = params;
+    const subject = 'Tài khoản của bạn đã được nâng quyền Staff';
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1976d2;">Tài khoản được nâng quyền</h2>
+        <p>Xin chào ${fullName || 'bạn'},</p>
+        <p>Tài khoản của bạn trên hệ thống <strong>FPT Event System</strong> đã được nâng quyền thành <strong>Staff</strong>${
+          organizerName ? ` cho CLB/Organizer <strong>${organizerName}</strong>` : ''
+        }.</p>
+        <p>Bạn có thể đăng nhập và sử dụng các chức năng dành cho Staff trên hệ thống.</p>
+        <p>Nếu bạn không mong đợi thay đổi này, vui lòng liên hệ bộ phận hỗ trợ.</p>
+        <p>Bạn có thể đăng nhập tại: <a href="${
+          process.env.FRONTEND_URL || 'https://your-frontend-url.com'
+        }/login" style="color: #1976d2;">Đăng nhập</a></p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="color: #666; font-size: 12px;">
+          Trân trọng,<br/>
+          <strong>FPT Event Team</strong>
+        </p>
+      </div>
+    `;
+
+    await this.send({
+      to: email,
+      subject,
+      html,
+    });
+  }
+
+  /**
    * Gửi email thông báo cho staff khi được assign vào event
    */
   async sendStaffAssignedEmail(params: {

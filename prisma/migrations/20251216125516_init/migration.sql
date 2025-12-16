@@ -70,6 +70,7 @@ CREATE TABLE "organizer_requests" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "contact_email" TEXT,
+    "member_emails" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "logo_url" TEXT,
     "proof_image_url" TEXT,
     "status" "OrganizerRequestStatus" NOT NULL DEFAULT 'PENDING',

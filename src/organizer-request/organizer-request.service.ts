@@ -4,7 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrganizerRequestStatus, UserRole } from '@prisma/client';
+import * as argon2 from 'argon2';
+import * as crypto from 'crypto';
+import { OrganizerRequestStatus, UserRole, UserStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { NotificationService } from '../notification/notification.service';
@@ -67,6 +69,7 @@ export class OrganizerRequestService {
         campusId: dto.campusId,
         logoUrl: dto.logoUrl,
         proofImageUrl: dto.proofImageUrl,
+        memberEmails: dto.memberEmails ?? [],
       },
       include: {
         campus: true,
@@ -189,6 +192,7 @@ export class OrganizerRequestService {
             lastName: true,
             userName: true,
             roleName: true,
+            campusId: true,
           },
         },
         campus: {
@@ -218,6 +222,17 @@ export class OrganizerRequestService {
 
     let organizerCreated: { id: number; name: string } | null = null;
     let organizerCreatedName: string | null = null;
+
+    const createdStaffAccounts: {
+      email: string;
+      password: string;
+      fullName: string;
+    }[] = [];
+
+    const upgradedStaffAccounts: {
+      email: string;
+      fullName: string;
+    }[] = [];
 
     await this.prisma.$transaction(async (tx) => {
       // Update request
@@ -251,6 +266,95 @@ export class OrganizerRequestService {
         });
         organizerCreated = { id: organizer.id, name: organizer.name };
         organizerCreatedName = organizer.name;
+
+        // Tạo/nâng cấp tài khoản staff cho các email thành viên CLB
+        const memberEmails = request.memberEmails ?? [];
+        const campusIdForStaff = request.campusId ?? request.user.campusId;
+
+        if (!campusIdForStaff && memberEmails.length > 0) {
+          throw new BadRequestException(
+            'Không xác định được campus cho staff của organizer này',
+          );
+        }
+
+        for (const rawEmail of memberEmails) {
+          const email = rawEmail?.trim().toLowerCase();
+          if (!email) continue;
+
+          const existingUser = await tx.user.findUnique({
+            where: { email },
+          });
+
+          if (existingUser) {
+            // Nếu user đang là student thì nâng lên staff, các role khác giữ nguyên role
+            if (existingUser.roleName === UserRole.student) {
+              const updated = await tx.user.update({
+                where: { id: existingUser.id },
+                data: {
+                  roleName: UserRole.staff,
+                },
+              });
+
+              upgradedStaffAccounts.push({
+                email: updated.email,
+                fullName:
+                  `${updated.firstName} ${updated.lastName}`.trim() ||
+                  updated.userName,
+              });
+            } else {
+              // Không đổi role nhưng vẫn gửi mail thông báo
+              upgradedStaffAccounts.push({
+                email: existingUser.email,
+                fullName:
+                  `${existingUser.firstName} ${existingUser.lastName}`.trim() ||
+                  existingUser.userName,
+              });
+            }
+
+            continue;
+          }
+
+          // Tạo tài khoản staff mới với password ngẫu nhiên
+          const randomPassword = generateRandomPassword();
+          const passwordHash = await argon2.hash(randomPassword);
+
+          const usernameBase = email.split('@')[0];
+          let userName = usernameBase;
+
+          // Đảm bảo username là unique, nếu trùng thì thêm số đuôi
+          let counter = 1;
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const conflict = await tx.user.findUnique({
+              where: { userName },
+            });
+            if (!conflict) break;
+            userName = `${usernameBase}${counter}`;
+            counter += 1;
+          }
+
+          const createdUser = await tx.user.create({
+            data: {
+              userName,
+              email,
+              campusId: campusIdForStaff!,
+              roleName: UserRole.staff,
+              passwordHash,
+              firstName: '',
+              lastName: '',
+              status: UserStatus.APPROVED,
+              isActive: true,
+            },
+          });
+
+          createdStaffAccounts.push({
+            email: createdUser.email,
+            password: randomPassword,
+            fullName:
+              `${createdUser.firstName} ${createdUser.lastName}`.trim() ||
+              createdUser.userName,
+          });
+        }
       }
     });
 
@@ -259,11 +363,13 @@ export class OrganizerRequestService {
       request.user.userName;
 
     if (dto.status === OrganizerRequestStatus.APPROVED) {
+      const organizerNameForMail = organizerCreatedName ?? request.name;
+
       this.emailService
         .sendOrganizerRequestApproved({
           email: request.user.email,
           fullName,
-          organizerName: organizerCreatedName ?? request.name,
+          organizerName: organizerNameForMail,
         })
         .catch((error) =>
           console.error(
@@ -271,6 +377,39 @@ export class OrganizerRequestService {
             error,
           ),
         );
+
+      // Gửi email cho các tài khoản staff mới được tạo (giống luồng createUser)
+      for (const staff of createdStaffAccounts) {
+        this.emailService
+          .sendAccountCreatedEmail({
+            email: staff.email,
+            password: staff.password,
+            roleName: UserRole.staff,
+            fullName: staff.fullName,
+          })
+          .catch((error) =>
+            console.error(
+              `Failed to send staff account created email to ${staff.email}:`,
+              error,
+            ),
+          );
+      }
+
+      // Gửi email thông báo nâng quyền staff cho các user đã tồn tại
+      for (const staff of upgradedStaffAccounts) {
+        this.emailService
+          .sendStaffRoleUpgradedEmail({
+            email: staff.email,
+            fullName: staff.fullName,
+            organizerName: organizerNameForMail,
+          })
+          .catch((error) =>
+            console.error(
+              `Failed to send staff role upgraded email to ${staff.email}:`,
+              error,
+            ),
+          );
+      }
     } else {
       this.emailService
         .sendOrganizerRequestRejected({
@@ -319,4 +458,12 @@ export class OrganizerRequestService {
 
     return { success: true, status: dto.status, organizer: organizerCreated };
   }
+}
+
+function generateRandomPassword(length = 12) {
+  // Sinh password ngẫu nhiên, loại ký tự đặc biệt để tránh gây nhầm lẫn
+  const raw = crypto.randomBytes(16).toString('base64');
+  const sanitized = raw.replace(/[^A-Za-z0-9]/g, '');
+  const pwd = sanitized.slice(0, length);
+  return pwd || 'Staff123';
 }

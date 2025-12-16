@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsEmail,
   IsInt,
   IsNotEmpty,
@@ -51,5 +53,18 @@ export class SubmitOrganizerRequestDto {
   @IsString()
   @IsNotEmpty()
   proofImageUrl: string;
+
+  @ApiProperty({
+    required: false,
+    type: [String],
+    description:
+      'Danh sách email thành viên CLB (sẽ được tạo/nâng cấp thành staff khi request được duyệt)',
+    example: ['member1@fpt.edu.vn', 'member2@fpt.edu.vn'],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsEmail({}, { each: true })
+  memberEmails?: string[];
 }
 
