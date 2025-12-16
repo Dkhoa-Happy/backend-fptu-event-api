@@ -150,6 +150,7 @@ CREATE TABLE "venues" (
     "row" INTEGER NOT NULL,
     "column" INTEGER NOT NULL,
     "has_seats" BOOLEAN NOT NULL,
+    "capacity" INTEGER NOT NULL DEFAULT 0,
     "map_image_url" TEXT,
     "status" TEXT NOT NULL,
     "campus_id" INTEGER NOT NULL,

@@ -23,6 +23,7 @@ export class VenueSeeder implements Seeder {
           row: 15,
           column: 20,
           hasSeats: true,
+          capacity: 300, // 15 * 20 = 300
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375022/428653189_787262210099440_3043567085344585742_n-650x488_kt7c69.jpg',
           campusCode: 'FU-HL',
@@ -33,6 +34,7 @@ export class VenueSeeder implements Seeder {
           row: 8,
           column: 10,
           hasSeats: true,
+          capacity: 80, // 8 * 10 = 80
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375065/428653189_787262210099440_3043567085344585742_n-650x488_hhisdo.jpg',
           campusCode: 'FU-HL',
@@ -43,6 +45,7 @@ export class VenueSeeder implements Seeder {
           row: 0,
           column: 0,
           hasSeats: false,
+          capacity: 500,
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375065/428653189_787262210099440_3043567085344585742_n-650x488_hhisdo.jpg',
           campusCode: 'FU-HL',
@@ -54,6 +57,7 @@ export class VenueSeeder implements Seeder {
           row: 10,
           column: 10,
           hasSeats: true,
+          capacity: 100, // 10 * 10 = 100
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375201/546969190_758650040324615_3150035516932545546_n_od4xol.jpg',
           campusCode: 'FU-HCM',
@@ -64,6 +68,7 @@ export class VenueSeeder implements Seeder {
           row: 12,
           column: 15,
           hasSeats: true,
+          capacity: 180, // 12 * 15 = 180
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375248/SV_DH_FPT_giao_luu_chuyen-gia_tiktok_2-1024x768_j42qkw.jpg',
           campusCode: 'FU-HCM',
@@ -74,6 +79,7 @@ export class VenueSeeder implements Seeder {
           row: 0,
           column: 0,
           hasSeats: false,
+          capacity: 200,
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375304/FU-HCM-5_psjqnf.jpg',
           campusCode: 'FU-HCM',
@@ -85,6 +91,7 @@ export class VenueSeeder implements Seeder {
           row: 10,
           column: 12,
           hasSeats: true,
+          capacity: 120, // 10 * 12 = 120
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375387/SV_DH_FPT_giao_luu_chuyen-gia_tiktok_2-1024x768_mvaen3.jpg',
           campusCode: 'FU-DN',
@@ -95,6 +102,7 @@ export class VenueSeeder implements Seeder {
           row: 6,
           column: 8,
           hasSeats: true,
+          capacity: 48, // 6 * 8 = 48
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375431/ht_drjemq.jpg',
           campusCode: 'FU-DN',
@@ -105,6 +113,7 @@ export class VenueSeeder implements Seeder {
           row: 0,
           column: 0,
           hasSeats: false,
+          capacity: 150,
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375431/ht_drjemq.jpg',
           campusCode: 'FU-DN',
@@ -116,6 +125,7 @@ export class VenueSeeder implements Seeder {
           row: 8,
           column: 10,
           hasSeats: true,
+          capacity: 80, // 8 * 10 = 80
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375518/ct_qlykan.jpg',
           campusCode: 'FU-CT',
@@ -126,6 +136,7 @@ export class VenueSeeder implements Seeder {
           row: 5,
           column: 6,
           hasSeats: true,
+          capacity: 30, // 5 * 6 = 30
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375518/ct_qlykan.jpg',
           campusCode: 'FU-CT',
@@ -137,6 +148,7 @@ export class VenueSeeder implements Seeder {
           row: 10,
           column: 12,
           hasSeats: true,
+          capacity: 120, // 10 * 12 = 120
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375625/DH-FPT-Quy-Nho%CC%9Bn-588x325_lk4waq.jpg',
           campusCode: 'FU-QN',
@@ -147,6 +159,7 @@ export class VenueSeeder implements Seeder {
           row: 0,
           column: 0,
           hasSeats: false,
+          capacity: 100,
           mapImageUrl:
             'https://res.cloudinary.com/dpqvdxj10/image/upload/v1765375625/DH-FPT-Quy-Nho%CC%9Bn-588x325_lk4waq.jpg',
           campusCode: 'FU-QN',
@@ -187,6 +200,7 @@ export class VenueSeeder implements Seeder {
             row: venueData.row,
             column: venueData.column,
             hasSeats: venueData.hasSeats,
+            capacity: venueData.capacity,
             mapImageUrl: venueData.mapImageUrl,
             campusId: campus.id,
             status: 'ACTIVE',

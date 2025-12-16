@@ -278,6 +278,7 @@ model Venue {
   row         Int
   column      Int
   hasSeats    Boolean @map("has_seats")
+  capacity    Int     @default(0) @map("capacity")
   mapImageUrl String? @map("map_image_url")
   status      String
 

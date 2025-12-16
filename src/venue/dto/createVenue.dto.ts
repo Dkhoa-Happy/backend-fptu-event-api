@@ -54,4 +54,12 @@ export class CreateVenueDto {
   })
   @IsInt()
   campusId: number;
+
+  @ApiProperty({
+    description: 'Sức chứa tối đa của venue',
+    example: 200,
+  })
+  @IsInt()
+  @Min(0)
+  capacity: number;
 }
