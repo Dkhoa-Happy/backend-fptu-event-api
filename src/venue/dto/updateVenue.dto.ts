@@ -28,4 +28,14 @@ export class UpdateVenueDto {
   @IsOptional()
   @IsString()
   mapImageUrl?: string;
+
+  @ApiProperty({
+    description: 'Sức chứa tối đa của venue',
+    required: false,
+    example: 200,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  capacity?: number;
 }

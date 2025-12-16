@@ -97,7 +97,7 @@ export class EventService {
     if (dto.venueId) {
       const venue = await this.prisma.venue.findUnique({
         where: { id: dto.venueId },
-        select: { id: true, status: true, campusId: true },
+        select: { id: true, status: true, campusId: true, capacity: true },
       });
 
       if (!venue) {
@@ -119,6 +119,19 @@ export class EventService {
       ) {
         throw new BadRequestException(
           `Organizer và venue phải cùng campus. Organizer thuộc campus ID ${organizer.campusId}, nhưng venue thuộc campus ID ${venue.campusId}.`,
+        );
+      }
+
+      // Validate maxCapacity không vượt quá capacity của venue (nếu có)
+      if (
+        typeof dto.maxCapacity === 'number' &&
+        dto.maxCapacity > 0 &&
+        typeof venue.capacity === 'number' &&
+        venue.capacity > 0 &&
+        dto.maxCapacity > venue.capacity
+      ) {
+        throw new BadRequestException(
+          `Sức chứa sự kiện (maxCapacity = ${dto.maxCapacity}) không được vượt quá sức chứa venue (${venue.capacity}).`,
         );
       }
 
