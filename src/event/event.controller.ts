@@ -426,4 +426,33 @@ export class EventController {
       roleName: user.roleName,
     });
   }
+
+  @Delete(':id')
+  @Roles(UserRole.event_organizer)
+  @ApiOperation({
+    summary:
+      'Delete event (organizer only, PENDING status only) - Required roles: event_organizer',
+    description:
+      'Event organizer can delete their own events that are still PENDING. Once event is PUBLISHED, must use cancellation request API instead. Only organizer owner can delete their events.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Event deleted successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Event not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Bad request (e.g., event is not PENDING, cannot delete published events)',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Forbidden. Required roles: event_organizer. Or you do not own this event organizer.',
+  })
+  async delete(@Param('id') id: string, @GetUser() user: any) {
+    return this.eventService.delete(id, user);
+  }
 }

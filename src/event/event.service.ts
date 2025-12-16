@@ -3133,4 +3133,116 @@ export class EventService {
       console.error('Error updating multiple event statuses:', error);
     }
   }
+
+  /**
+   * Event organizer xóa sự kiện khỏi DB (chỉ cho phép khi status = PENDING)
+   * Nếu status = PUBLISHED hoặc các status khác, phải dùng cancellation request
+   */
+  async delete(id: string, currentUser?: { id?: number; roleName?: string }) {
+    // Check if event exists
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            ownerId: true,
+          },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
+    }
+
+    // Check permission: only organizer owner can delete
+    if (currentUser?.roleName === 'event_organizer' && currentUser.id) {
+      if (!event.organizer.ownerId) {
+        throw new ForbiddenException(
+          'Organizer này không có chủ sở hữu. Bạn không thể xóa sự kiện của organizer này.',
+        );
+      }
+
+      if (event.organizer.ownerId !== currentUser.id) {
+        throw new ForbiddenException(
+          'Bạn không có quyền xóa sự kiện này. Bạn không phải là chủ sở hữu của organizer này.',
+        );
+      }
+    }
+
+    // Only allow deleting PENDING events
+    if (event.status !== EventStatus.PENDING) {
+      throw new BadRequestException(
+        `Không thể xóa sự kiện này. Chỉ có thể xóa sự kiện có trạng thái PENDING. Trạng thái hiện tại: ${event.status}. Đối với sự kiện đã PUBLISHED, vui lòng sử dụng API yêu cầu hủy sự kiện.`,
+      );
+    }
+
+    try {
+      // Delete related records manually before deleting event (transaction)
+      await this.prisma.$transaction(async (tx) => {
+        // Delete event speakers
+        await tx.eventSpeaker.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete event staffs
+        await tx.eventStaff.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete tickets (if any - though PENDING events shouldn't have tickets)
+        await tx.ticket.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete feedbacks (if any)
+        await tx.feedback.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete incidents (if any)
+        await tx.incident.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete event notification logs
+        await tx.eventNotificationLog.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete cancellation requests (if any)
+        await tx.eventCancellationRequest.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete event summary (if any)
+        await tx.eventSummary.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Finally delete the event
+        await tx.event.delete({
+          where: { id },
+        });
+      });
+
+      return {
+        message: 'Sự kiện đã được xóa thành công',
+        eventId: id,
+        title: event.title,
+      };
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === 'P2025'
+      ) {
+        throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
+      }
+
+      throw error;
+    }
+  }
 }
