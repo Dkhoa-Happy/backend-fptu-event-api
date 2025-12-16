@@ -22,6 +22,9 @@ CREATE TYPE "OrganizerRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED')
 -- CreateEnum
 CREATE TYPE "CancellationRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
+-- CreateEnum
+CREATE TYPE "RecurrenceType" AS ENUM ('NONE', 'WEEKLY', 'MONTHLY', 'YEARLY');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" SERIAL NOT NULL,
@@ -98,6 +101,12 @@ CREATE TABLE "events" (
     "status" "EventStatus" NOT NULL DEFAULT 'PENDING',
     "max_capacity" INTEGER NOT NULL,
     "registered_count" INTEGER NOT NULL DEFAULT 0,
+    "is_online" BOOLEAN NOT NULL DEFAULT false,
+    "online_meeting_url" TEXT,
+    "recurrence_type" "RecurrenceType" NOT NULL DEFAULT 'NONE',
+    "recurrence_interval" INTEGER,
+    "recurrence_end_date" TIMESTAMP(3),
+    "recurrence_count" INTEGER,
     "is_global" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "host_id" INTEGER NOT NULL,

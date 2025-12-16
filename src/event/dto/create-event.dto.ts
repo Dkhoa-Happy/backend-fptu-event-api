@@ -157,4 +157,62 @@ export class CreateEventDto {
   @ValidateNested({ each: true })
   @Type(() => CreateEventSpeakerDto)
   speakers?: CreateEventSpeakerDto[];
+
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'Đánh dấu sự kiện là online. Nếu true, có thể không cần venueId và nên truyền onlineMeetingUrl.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  isOnline?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'https://meet.google.com/abc-defg-hij',
+    description: 'Link Google Meet/Zoom/Teams nếu sự kiện là online',
+  })
+  @IsOptional()
+  @IsUrl()
+  onlineMeetingUrl?: string;
+
+  @ApiPropertyOptional({
+    example: 'WEEKLY',
+    description:
+      'Kiểu lặp lại của sự kiện: WEEKLY | MONTHLY | YEARLY. Nếu không truyền thì là sự kiện một lần.',
+    enum: ['NONE', 'WEEKLY', 'MONTHLY', 'YEARLY'],
+  })
+  @IsOptional()
+  @IsString()
+  recurrenceType?: 'NONE' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+
+  @ApiPropertyOptional({
+    example: 1,
+    description:
+      'Khoảng lặp: ví dụ 1 = mỗi tuần/tháng, 2 = 2 tuần 1 lần,... Chỉ dùng khi có recurrenceType.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recurrenceInterval?: number;
+
+  @ApiPropertyOptional({
+    example: '2026-01-01T00:00:00Z',
+    description:
+      'Ngày kết thúc pattern lặp lại (ISO 8601). Có thể dùng recurrenceEndDate hoặc recurrenceCount.',
+  })
+  @IsOptional()
+  @IsDateString()
+  recurrenceEndDate?: string;
+
+  @ApiPropertyOptional({
+    example: 10,
+    description:
+      'Số lần lặp tối đa. Nếu không truyền, có thể dùng recurrenceEndDate để giới hạn.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  recurrenceCount?: number;
 }
