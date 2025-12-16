@@ -189,12 +189,14 @@ model Event {
   description       String?
   category          String?
   bannerUrl         String?     @map("banner_url")
-  startTimeRegister DateTime    @map("start_time_register")
-  endTimeRegister   DateTime    @map("end_time_register")
+  /// Thời gian bắt đầu/kết thúc đăng ký. Null nếu sự kiện là online (isOnline = true)
+  startTimeRegister DateTime?   @map("start_time_register")
+  endTimeRegister   DateTime?   @map("end_time_register")
   startTime         DateTime    @map("start_time")
   endTime           DateTime    @map("end_time")
   status            EventStatus @default(PENDING)
-  maxCapacity       Int         @map("max_capacity")
+  /// Sức chứa tối đa. Null nếu sự kiện là online (isOnline = true)
+  maxCapacity       Int?        @map("max_capacity")
   registeredCount   Int         @default(0) @map("registered_count")
   /// Sự kiện online (true) hay offline (false - tại venue)
   isOnline          Boolean     @default(false) @map("is_online")

@@ -79,28 +79,37 @@ export class CreateEventDto {
   @IsFutureDate({ message: 'Thời gian kết thúc sự kiện không được là ngày quá khứ' })
   endTime: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: '2025-12-13T00:00:00Z',
-    description: 'Registration start time (ISO 8601 format)',
+    description:
+      'Registration start time (ISO 8601 format). Không bắt buộc nếu sự kiện là online (isOnline = true).',
   })
+  @IsOptional()
   @IsDateString()
   @IsFutureDate({ message: 'Thời gian bắt đầu đăng ký không được là ngày quá khứ' })
-  startTimeRegister: string;
+  startTimeRegister?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: '2025-12-14T23:59:59Z',
-    description: 'Registration end time (ISO 8601 format)',
+    description:
+      'Registration end time (ISO 8601 format). Không bắt buộc nếu sự kiện là online (isOnline = true).',
   })
+  @IsOptional()
   @IsDateString()
   @IsFutureDate({ message: 'Thời gian kết thúc đăng ký không được là ngày quá khứ' })
-  endTimeRegister: string;
+  endTimeRegister?: string;
 
-  @ApiProperty({ example: 100, description: 'Maximum capacity of the event' })
+  @ApiPropertyOptional({
+    example: 100,
+    description:
+      'Maximum capacity of the event. Không bắt buộc nếu sự kiện là online (isOnline = true).',
+  })
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1, { message: 'Maximum capacity must be at least 1' })
   @Max(10000, { message: 'Maximum capacity cannot exceed 10000' })
-  maxCapacity: number;
+  maxCapacity?: number;
 
   @ApiPropertyOptional({
     example: true,

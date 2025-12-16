@@ -282,8 +282,7 @@ export class EventService {
     // Validate time relationships
     const startTime = baseStartTime;
     const endTime = baseEndTime;
-    const startTimeRegister = new Date(dto.startTimeRegister);
-    const endTimeRegister = new Date(dto.endTimeRegister);
+    const isOnline = dto.isOnline ?? false;
 
     // Check if startTime is before endTime
     if (startTime >= endTime) {
@@ -292,25 +291,44 @@ export class EventService {
       );
     }
 
-    // Check if startTimeRegister is before endTimeRegister
-    if (startTimeRegister >= endTimeRegister) {
-      throw new BadRequestException(
-        'Thời gian bắt đầu đăng ký phải trước thời gian kết thúc đăng ký',
-      );
-    }
+    // For online events, registration times and maxCapacity are optional
+    // For offline events, registration times and maxCapacity are required
+    if (!isOnline) {
+      if (!dto.startTimeRegister || !dto.endTimeRegister) {
+        throw new BadRequestException(
+          'Sự kiện offline cần có thời gian bắt đầu và kết thúc đăng ký',
+        );
+      }
 
-    // Check if registration ends before event starts
-    if (endTimeRegister >= startTime) {
-      throw new BadRequestException(
-        'Thời gian kết thúc đăng ký phải trước khi sự kiện bắt đầu',
-      );
-    }
+      if (!dto.maxCapacity) {
+        throw new BadRequestException(
+          'Sự kiện offline cần có sức chứa tối đa (maxCapacity)',
+        );
+      }
 
-    // Check if registration start is before event start
-    if (startTimeRegister >= startTime) {
-      throw new BadRequestException(
-        'Thời gian bắt đầu đăng ký phải trước thời gian bắt đầu sự kiện',
-      );
+      const startTimeRegister = new Date(dto.startTimeRegister);
+      const endTimeRegister = new Date(dto.endTimeRegister);
+
+      // Check if startTimeRegister is before endTimeRegister
+      if (startTimeRegister >= endTimeRegister) {
+        throw new BadRequestException(
+          'Thời gian bắt đầu đăng ký phải trước thời gian kết thúc đăng ký',
+        );
+      }
+
+      // Check if registration ends before event starts
+      if (endTimeRegister >= startTime) {
+        throw new BadRequestException(
+          'Thời gian kết thúc đăng ký phải trước khi sự kiện bắt đầu',
+        );
+      }
+
+      // Check if registration start is before event start
+      if (startTimeRegister >= startTime) {
+        throw new BadRequestException(
+          'Thời gian bắt đầu đăng ký phải trước thời gian bắt đầu sự kiện',
+        );
+      }
     }
 
     // Optional: Check if event is in the past (you may want to allow this for testing)
@@ -529,10 +547,22 @@ export class EventService {
               bannerUrl: dto.bannerUrl,
               startTime: occ.startTime,
               endTime: occ.endTime,
-              startTimeRegister: new Date(dto.startTimeRegister),
-              endTimeRegister: new Date(dto.endTimeRegister),
+              startTimeRegister: isOnline
+                ? null
+                : dto.startTimeRegister
+                  ? new Date(dto.startTimeRegister)
+                  : null,
+              endTimeRegister: isOnline
+                ? null
+                : dto.endTimeRegister
+                  ? new Date(dto.endTimeRegister)
+                  : null,
               status: EventStatus.PENDING,
-              maxCapacity: dto.maxCapacity,
+              maxCapacity: isOnline
+                ? null
+                : dto.maxCapacity !== undefined
+                  ? dto.maxCapacity
+                  : null,
               isGlobal: dto.isGlobal ?? false,
               organizerId: dto.organizerId,
               venueId: dto.venueId,
@@ -759,7 +789,15 @@ export class EventService {
         const visibilityCondition: Prisma.EventWhereInput = {
           OR: [
             { isGlobal: true },
+            { isOnline: true }, // Online events có thể tham gia từ bất kỳ đâu
             { venue: { campusId: currentUser.campusId } },
+            {
+              // Online events thuộc organizer cùng campus hoặc organizer không có campus (global)
+              isOnline: true,
+              organizer: {
+                OR: [{ campusId: currentUser.campusId }, { campusId: null }],
+              },
+            },
           ],
         };
 
@@ -776,7 +814,18 @@ export class EventService {
     // Nếu là staff: cũng chỉ thấy event global hoặc event thuộc campus của mình
     if (currentUser?.roleName === 'staff' && currentUser.campusId) {
       const visibilityCondition: Prisma.EventWhereInput = {
-        OR: [{ isGlobal: true }, { venue: { campusId: currentUser.campusId } }],
+        OR: [
+          { isGlobal: true },
+          { isOnline: true }, // Online events có thể tham gia từ bất kỳ đâu
+          { venue: { campusId: currentUser.campusId } },
+          {
+            // Online events thuộc organizer cùng campus hoặc organizer không có campus (global)
+            isOnline: true,
+            organizer: {
+              OR: [{ campusId: currentUser.campusId }, { campusId: null }],
+            },
+          },
+        ],
       };
 
       if (where.AND) {
@@ -915,6 +964,7 @@ export class EventService {
             description: true,
             contactEmail: true,
             logoUrl: true,
+            campusId: true, // Thêm campusId để check visibility cho online events
           },
         },
         venue: {
@@ -1003,7 +1053,9 @@ export class EventService {
     if (currentUser?.roleName === 'student' && currentUser.campusId) {
       const isSameCampus =
         event.venue && event.venue.campusId === currentUser.campusId;
-      if (!event.isGlobal && !isSameCampus) {
+      const isOnlineEvent = event.isOnline;
+      // Cho phép nếu: global, venue cùng campus, hoặc online event (có thể tham gia từ bất kỳ đâu)
+      if (!event.isGlobal && !isSameCampus && !isOnlineEvent) {
         throw new ForbiddenException('Bạn không có quyền truy cập sự kiện này');
       }
     }
@@ -1012,7 +1064,9 @@ export class EventService {
     if (currentUser?.roleName === 'staff' && currentUser.campusId) {
       const isSameCampus =
         event.venue && event.venue.campusId === currentUser.campusId;
-      if (!event.isGlobal && !isSameCampus) {
+      const isOnlineEvent = event.isOnline;
+      // Cho phép nếu: global, venue cùng campus, hoặc online event (có thể tham gia từ bất kỳ đâu)
+      if (!event.isGlobal && !isSameCampus && !isOnlineEvent) {
         throw new ForbiddenException('Bạn không có quyền truy cập sự kiện này');
       }
     }
@@ -1253,10 +1307,18 @@ export class EventService {
       }
     }
 
+    // Validate registration times (only for offline events)
     if (
       dto.startTimeRegister !== undefined ||
       dto.endTimeRegister !== undefined
     ) {
+      // Both must be provided and not null for offline events
+      if (!finalStartTimeRegister || !finalEndTimeRegister) {
+        throw new BadRequestException(
+          'Sự kiện offline cần có thời gian bắt đầu và kết thúc đăng ký',
+        );
+      }
+
       if (finalStartTimeRegister >= finalEndTimeRegister) {
         throw new BadRequestException(
           'Thời gian bắt đầu đăng ký phải trước thời gian kết thúc đăng ký',
@@ -1264,8 +1326,11 @@ export class EventService {
       }
     }
 
-    // Check if registration ends before event starts
-    if (dto.endTimeRegister !== undefined || dto.startTime !== undefined) {
+    // Check if registration ends before event starts (only if registration times exist)
+    if (
+      (dto.endTimeRegister !== undefined || dto.startTime !== undefined) &&
+      finalEndTimeRegister
+    ) {
       if (finalEndTimeRegister >= finalStartTime) {
         throw new BadRequestException(
           'Thời gian kết thúc đăng ký phải trước khi sự kiện bắt đầu',
@@ -1273,8 +1338,11 @@ export class EventService {
       }
     }
 
-    // Check if registration start is before event start
-    if (dto.startTimeRegister !== undefined || dto.startTime !== undefined) {
+    // Check if registration start is before event start (only if registration times exist)
+    if (
+      (dto.startTimeRegister !== undefined || dto.startTime !== undefined) &&
+      finalStartTimeRegister
+    ) {
       if (finalStartTimeRegister >= finalStartTime) {
         throw new BadRequestException(
           'Thời gian bắt đầu đăng ký phải trước thời gian bắt đầu sự kiện',

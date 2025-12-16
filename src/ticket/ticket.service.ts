@@ -53,6 +53,7 @@ export class TicketService {
         registeredCount: true,
         isGlobal: true,
         venueId: true,
+        isOnline: true,
         venue: {
           select: {
             id: true,
@@ -64,6 +65,13 @@ export class TicketService {
 
     if (!event) {
       throw new NotFoundException(`Event with ID ${dto.eventId} not found`);
+    }
+
+    // Check if event is online - online events don't require ticket registration
+    if (event.isOnline) {
+      throw new BadRequestException(
+        'Sự kiện online không cần đăng ký vé. Bạn có thể tham gia trực tiếp qua link meeting.',
+      );
     }
 
     // Check if event is published
@@ -90,14 +98,26 @@ export class TicketService {
     }
     // If isGlobal = true, allow all students from any campus
 
-    // Check if event has reached max capacity
+    // Check if event has reached max capacity (offline events must have maxCapacity)
+    if (event.maxCapacity == null) {
+      throw new BadRequestException(
+        'Sự kiện này không có giới hạn sức chứa hợp lệ (maxCapacity). Vui lòng liên hệ admin.',
+      );
+    }
+
     if (event.registeredCount >= event.maxCapacity) {
       throw new BadRequestException(
         `Sự kiện đã đạt số lượng tối đa (${event.maxCapacity} người). Không thể đăng ký thêm.`,
       );
     }
 
-    // Check registration time
+    // Check registration time (only for offline events)
+    if (!event.startTimeRegister || !event.endTimeRegister) {
+      throw new BadRequestException(
+        'Sự kiện này không có thời gian đăng ký. Không thể đăng ký vé.',
+      );
+    }
+
     const now = new Date();
     const startTime = new Date(event.startTimeRegister);
     const endTime = new Date(event.endTimeRegister);
@@ -205,9 +225,9 @@ export class TicketService {
     }
 
     if (!isUnique) {
-        throw new BadRequestException(
-          'Không thể tạo mã QR duy nhất. Vui lòng thử lại.',
-        );
+      throw new BadRequestException(
+        'Không thể tạo mã QR duy nhất. Vui lòng thử lại.',
+      );
     }
 
     try {
@@ -223,7 +243,15 @@ export class TicketService {
         });
 
         if (!currentEvent) {
-          throw new NotFoundException(`Không tìm thấy sự kiện với ID ${dto.eventId}`);
+          throw new NotFoundException(
+            `Không tìm thấy sự kiện với ID ${dto.eventId}`,
+          );
+        }
+
+        if (currentEvent.maxCapacity == null) {
+          throw new BadRequestException(
+            'Sự kiện này không có giới hạn sức chứa hợp lệ (maxCapacity). Vui lòng liên hệ admin.',
+          );
         }
 
         if (currentEvent.registeredCount >= currentEvent.maxCapacity) {
@@ -386,9 +414,7 @@ export class TicketService {
 
         // Check for qrCode constraint violation (shouldn't happen with UUID, but just in case)
         if (targetFields.includes('qrCode')) {
-          throw new BadRequestException(
-            'Lỗi tạo mã QR. Vui lòng thử lại.',
-          );
+          throw new BadRequestException('Lỗi tạo mã QR. Vui lòng thử lại.');
         }
 
         // Generic unique constraint violation
@@ -1298,9 +1324,7 @@ export class TicketService {
 
       if (!ticket) {
         if (ticketId) {
-          throw new NotFoundException(
-            `Không tìm thấy vé với ID ${ticketId}`,
-          );
+          throw new NotFoundException(`Không tìm thấy vé với ID ${ticketId}`);
         } else {
           throw new NotFoundException(
             `Không tìm thấy vé cho student code ${studentCode} và event ID ${eventId}`,
@@ -1512,9 +1536,9 @@ export class TicketService {
       event.eventStaffs.some((s) => s.userId === currentUser?.id);
 
     if (!isAdmin && !isOrganizerOwner && !isAssignedStaff) {
-        throw new ForbiddenException(
-          'Bạn không được phép xem danh sách người tham dự của sự kiện này',
-        );
+      throw new ForbiddenException(
+        'Bạn không được phép xem danh sách người tham dự của sự kiện này',
+      );
     }
 
     // 2) Filters & pagination
