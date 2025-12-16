@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { EventStatus, TicketStatus } from '@prisma/client';
+import { EventStatus, TicketStatus, RecurrenceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventSummaryService } from './event-summary.service';
 import { NotificationService } from '../notification/notification.service';
@@ -35,6 +35,94 @@ export class EventService {
     dto: CreateEventDto,
     currentUser?: { id?: number; roleName?: string },
   ) {
+    // Build recurrence occurrences (từng lần tổ chức)
+    const baseStartTime = new Date(dto.startTime);
+    const baseEndTime = new Date(dto.endTime);
+
+    type Occurrence = { startTime: Date; endTime: Date };
+
+    const occurrences: Occurrence[] = [
+      { startTime: baseStartTime, endTime: baseEndTime },
+    ];
+
+    const recurrenceType =
+      (dto.recurrenceType as RecurrenceType | undefined) ?? RecurrenceType.NONE;
+
+    const recurrenceInterval = dto.recurrenceInterval ?? 1;
+    const recurrenceEndDate = dto.recurrenceEndDate
+      ? new Date(dto.recurrenceEndDate)
+      : undefined;
+    const recurrenceCount = dto.recurrenceCount;
+
+    if (
+      recurrenceType !== RecurrenceType.NONE &&
+      recurrenceType !== undefined
+    ) {
+      if (recurrenceInterval < 1) {
+        throw new BadRequestException(
+          'recurrenceInterval phải lớn hơn hoặc bằng 1 khi có recurrenceType',
+        );
+      }
+
+      if (!recurrenceEndDate && !recurrenceCount) {
+        throw new BadRequestException(
+          'Cần truyền recurrenceEndDate hoặc recurrenceCount khi sử dụng recurrenceType',
+        );
+      }
+
+      let currentStart = new Date(baseStartTime);
+      let currentEnd = new Date(baseEndTime);
+      let iterations = 0;
+      const maxIterations = 365; // Guard để tránh loop vô hạn
+
+      while (true) {
+        iterations += 1;
+        if (iterations > maxIterations) {
+          throw new BadRequestException(
+            'Quá nhiều lần lặp. Vui lòng giảm recurrenceInterval hoặc giới hạn bằng recurrenceEndDate / recurrenceCount',
+          );
+        }
+
+        const nextStart = new Date(currentStart);
+        const nextEnd = new Date(currentEnd);
+
+        switch (recurrenceType) {
+          case RecurrenceType.WEEKLY:
+            nextStart.setDate(nextStart.getDate() + 7 * recurrenceInterval);
+            nextEnd.setDate(nextEnd.getDate() + 7 * recurrenceInterval);
+            break;
+          case RecurrenceType.MONTHLY:
+            nextStart.setMonth(nextStart.getMonth() + recurrenceInterval);
+            nextEnd.setMonth(nextEnd.getMonth() + recurrenceInterval);
+            break;
+          case RecurrenceType.YEARLY:
+            nextStart.setFullYear(nextStart.getFullYear() + recurrenceInterval);
+            nextEnd.setFullYear(nextEnd.getFullYear() + recurrenceInterval);
+            break;
+          default:
+            // Nếu là NONE thì không vào đây, nhưng để fallback an toàn
+            iterations = maxIterations + 1;
+            continue;
+        }
+
+        if (recurrenceEndDate && nextStart > recurrenceEndDate) {
+          break;
+        }
+
+        if (
+          typeof recurrenceCount === 'number' &&
+          recurrenceCount > 0 &&
+          occurrences.length >= recurrenceCount
+        ) {
+          break;
+        }
+
+        occurrences.push({ startTime: nextStart, endTime: nextEnd });
+        currentStart = nextStart;
+        currentEnd = nextEnd;
+      }
+    }
+
     // Validate organizer exists and check permissions
     const organizer = await this.prisma.organizer.findUnique({
       where: { id: dto.organizerId },
@@ -192,11 +280,10 @@ export class EventService {
     }
 
     // Validate time relationships
-    const startTime = new Date(dto.startTime);
-    const endTime = new Date(dto.endTime);
+    const startTime = baseStartTime;
+    const endTime = baseEndTime;
     const startTimeRegister = new Date(dto.startTimeRegister);
     const endTimeRegister = new Date(dto.endTimeRegister);
-    const now = new Date();
 
     // Check if startTime is before endTime
     if (startTime >= endTime) {
@@ -276,74 +363,74 @@ export class EventService {
       }
 
       // Check for staff time conflicts with existing events
-      const startTime = new Date(dto.startTime);
-      const endTime = new Date(dto.endTime);
       for (const staffId of staffIds) {
-        const conflictingAssignments = await this.prisma.eventStaff.findMany({
-          where: {
-            userId: staffId,
-            event: {
-              status: {
-                in: [EventStatus.PUBLISHED, EventStatus.PENDING],
-              },
-              // Check if time ranges overlap
-              OR: [
-                // New event starts during existing event
-                {
-                  AND: [
-                    { startTime: { lte: startTime } },
-                    { endTime: { gt: startTime } },
-                  ],
+        for (const occ of occurrences) {
+          const conflictingAssignments = await this.prisma.eventStaff.findMany({
+            where: {
+              userId: staffId,
+              event: {
+                status: {
+                  in: [EventStatus.PUBLISHED, EventStatus.PENDING],
                 },
-                // New event ends during existing event
-                {
-                  AND: [
-                    { startTime: { lt: endTime } },
-                    { endTime: { gte: endTime } },
-                  ],
-                },
-                // New event completely contains existing event
-                {
-                  AND: [
-                    { startTime: { gte: startTime } },
-                    { endTime: { lte: endTime } },
-                  ],
-                },
-                // Existing event completely contains new event
-                {
-                  AND: [
-                    { startTime: { lte: startTime } },
-                    { endTime: { gte: endTime } },
-                  ],
-                },
-              ],
-            },
-          },
-          include: {
-            event: {
-              select: {
-                id: true,
-                title: true,
-                startTime: true,
-                endTime: true,
-                status: true,
+                // Check if time ranges overlap
+                OR: [
+                  // New event starts during existing event
+                  {
+                    AND: [
+                      { startTime: { lte: occ.startTime } },
+                      { endTime: { gt: occ.startTime } },
+                    ],
+                  },
+                  // New event ends during existing event
+                  {
+                    AND: [
+                      { startTime: { lt: occ.endTime } },
+                      { endTime: { gte: occ.endTime } },
+                    ],
+                  },
+                  // New event completely contains existing event
+                  {
+                    AND: [
+                      { startTime: { gte: occ.startTime } },
+                      { endTime: { lte: occ.endTime } },
+                    ],
+                  },
+                  // Existing event completely contains new event
+                  {
+                    AND: [
+                      { startTime: { lte: occ.startTime } },
+                      { endTime: { gte: occ.endTime } },
+                    ],
+                  },
+                ],
               },
             },
-            user: {
-              select: {
-                id: true,
-                userName: true,
+            include: {
+              event: {
+                select: {
+                  id: true,
+                  title: true,
+                  startTime: true,
+                  endTime: true,
+                  status: true,
+                },
+              },
+              user: {
+                select: {
+                  id: true,
+                  userName: true,
+                },
               },
             },
-          },
-        });
+          });
 
-        if (conflictingAssignments.length > 0) {
-          const conflictingEvent = conflictingAssignments[0].event;
-          const staffUser = conflictingAssignments[0].user;
-          throw new BadRequestException(
-            `Staff ${staffUser.userName} (ID: ${staffId}) đã được phân công cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Không thể phân công cùng lúc cho nhiều sự kiện trong cùng khoảng thời gian.`,
-          );
+          if (conflictingAssignments.length > 0) {
+            const conflictingEvent = conflictingAssignments[0].event;
+            const staffUser = conflictingAssignments[0].user;
+            throw new BadRequestException(
+              `Staff ${staffUser.userName} (ID: ${staffId}) đã được phân công cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Không thể phân công cùng lúc cho nhiều sự kiện trong cùng khoảng thời gian.`,
+            );
+          }
         }
       }
     }
@@ -364,219 +451,249 @@ export class EventService {
       }
 
       // Check for speaker time conflicts with existing events
-      const startTime = new Date(dto.startTime);
-      const endTime = new Date(dto.endTime);
       for (const speakerId of speakerIds) {
-        const conflictingAssignment = await this.prisma.eventSpeaker.findFirst({
-          where: {
-            speakerId: speakerId,
-            event: {
-              status: {
-                in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+        for (const occ of occurrences) {
+          const conflictingAssignment =
+            await this.prisma.eventSpeaker.findFirst({
+              where: {
+                speakerId: speakerId,
+                event: {
+                  status: {
+                    in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+                  },
+                  OR: [
+                    {
+                      AND: [
+                        { startTime: { lte: occ.startTime } },
+                        { endTime: { gt: occ.startTime } },
+                      ],
+                    },
+                    {
+                      AND: [
+                        { startTime: { lt: occ.endTime } },
+                        { endTime: { gte: occ.endTime } },
+                      ],
+                    },
+                    {
+                      AND: [
+                        { startTime: { gte: occ.startTime } },
+                        { endTime: { lte: occ.endTime } },
+                      ],
+                    },
+                    {
+                      AND: [
+                        { startTime: { lte: occ.startTime } },
+                        { endTime: { gte: occ.endTime } },
+                      ],
+                    },
+                  ],
+                },
               },
-              OR: [
-                {
-                  AND: [
-                    { startTime: { lte: startTime } },
-                    { endTime: { gt: startTime } },
-                  ],
+              include: {
+                event: {
+                  select: {
+                    id: true,
+                    title: true,
+                    startTime: true,
+                    endTime: true,
+                  },
                 },
-                {
-                  AND: [
-                    { startTime: { lt: endTime } },
-                    { endTime: { gte: endTime } },
-                  ],
+                speaker: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
                 },
-                {
-                  AND: [
-                    { startTime: { gte: startTime } },
-                    { endTime: { lte: endTime } },
-                  ],
-                },
-                {
-                  AND: [
-                    { startTime: { lte: startTime } },
-                    { endTime: { gte: endTime } },
-                  ],
-                },
-              ],
-            },
-          },
-          include: {
-            event: {
-              select: {
-                id: true,
-                title: true,
-                startTime: true,
-                endTime: true,
               },
-            },
-            speaker: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        });
+            });
 
-        if (conflictingAssignment) {
-          throw new BadRequestException(
-            `Speaker ${conflictingAssignment.speaker.name} (ID: ${speakerId}) đã được phân công cho sự kiện "${conflictingAssignment.event.title}" từ ${new Date(conflictingAssignment.event.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingAssignment.event.endTime).toLocaleString('vi-VN')}. Không thể phân công trùng lịch.`,
-          );
+          if (conflictingAssignment) {
+            throw new BadRequestException(
+              `Speaker ${conflictingAssignment.speaker.name} (ID: ${speakerId}) đã được phân công cho sự kiện "${conflictingAssignment.event.title}" từ ${new Date(conflictingAssignment.event.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingAssignment.event.endTime).toLocaleString('vi-VN')}. Không thể phân công trùng lịch.`,
+            );
+          }
         }
       }
     }
 
     try {
-      const event = await this.prisma.$transaction(async (tx) => {
-        const createdEvent = await tx.event.create({
-          data: {
-            title: dto.title,
-            description: dto.description,
-            category: dto.category,
-            bannerUrl: dto.bannerUrl,
-            startTime: new Date(dto.startTime),
-            endTime: new Date(dto.endTime),
-            startTimeRegister: new Date(dto.startTimeRegister),
-            endTimeRegister: new Date(dto.endTimeRegister),
-            status: 'PENDING',
-            maxCapacity: dto.maxCapacity,
-            isGlobal: dto.isGlobal ?? false,
-            organizerId: dto.organizerId,
-            venueId: dto.venueId,
-            hostId,
-          },
-        });
+      const events: any[] = await this.prisma.$transaction(async (tx) => {
+        const createdEvents: any[] = [];
 
-        if (staffIds.length > 0) {
-          await tx.eventStaff.createMany({
-            data: staffIds.map((userId) => ({
-              eventId: createdEvent.id,
-              userId,
-            })),
-            skipDuplicates: true,
+        for (const occ of occurrences) {
+          const createdEvent = await tx.event.create({
+            data: {
+              title: dto.title,
+              description: dto.description,
+              category: dto.category,
+              bannerUrl: dto.bannerUrl,
+              startTime: occ.startTime,
+              endTime: occ.endTime,
+              startTimeRegister: new Date(dto.startTimeRegister),
+              endTimeRegister: new Date(dto.endTimeRegister),
+              status: EventStatus.PENDING,
+              maxCapacity: dto.maxCapacity,
+              isGlobal: dto.isGlobal ?? false,
+              organizerId: dto.organizerId,
+              venueId: dto.venueId,
+              hostId,
+              isOnline: dto.isOnline ?? false,
+              onlineMeetingUrl: dto.onlineMeetingUrl,
+              recurrenceType,
+              recurrenceInterval:
+                recurrenceType === RecurrenceType.NONE
+                  ? null
+                  : recurrenceInterval,
+              recurrenceEndDate:
+                recurrenceType === RecurrenceType.NONE || !recurrenceEndDate
+                  ? null
+                  : recurrenceEndDate,
+              recurrenceCount:
+                recurrenceType === RecurrenceType.NONE || !recurrenceCount
+                  ? null
+                  : recurrenceCount,
+            },
           });
-        }
 
-        if (speakers.length > 0) {
-          await tx.eventSpeaker.createMany({
-            data: speakers.map((s) => ({
-              eventId: createdEvent.id,
-              speakerId: s.speakerId,
-              topic: s.topic,
-            })),
-            skipDuplicates: true,
-          });
-        }
+          if (staffIds.length > 0) {
+            await tx.eventStaff.createMany({
+              data: staffIds.map((userId) => ({
+                eventId: createdEvent.id,
+                userId,
+              })),
+              skipDuplicates: true,
+            });
+          }
 
-        const fullEvent = await tx.event.findUnique({
-          where: { id: createdEvent.id },
-          include: {
-            organizer: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-                contactEmail: true,
-                logoUrl: true,
+          if (speakers.length > 0) {
+            await tx.eventSpeaker.createMany({
+              data: speakers.map((s) => ({
+                eventId: createdEvent.id,
+                speakerId: s.speakerId,
+                topic: s.topic,
+              })),
+              skipDuplicates: true,
+            });
+          }
+
+          const fullEvent = await tx.event.findUnique({
+            where: { id: createdEvent.id },
+            include: {
+              organizer: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  contactEmail: true,
+                  logoUrl: true,
+                },
               },
-            },
-            venue: {
-              select: {
-                id: true,
-                name: true,
-                location: true,
-                hasSeats: true,
+              venue: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                  hasSeats: true,
+                },
               },
-            },
-            host: {
-              select: {
-                id: true,
-                userName: true,
-                email: true,
-                firstName: true,
-                lastName: true,
+              host: {
+                select: {
+                  id: true,
+                  userName: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                },
               },
-            },
-            eventSpeakers: {
-              include: {
-                speaker: {
-                  select: {
-                    id: true,
-                    name: true,
-                    bio: true,
-                    avatar: true,
-                    type: true,
-                    company: true,
+              eventSpeakers: {
+                include: {
+                  speaker: {
+                    select: {
+                      id: true,
+                      name: true,
+                      bio: true,
+                      avatar: true,
+                      type: true,
+                      company: true,
+                    },
+                  },
+                },
+              },
+              eventStaffs: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      userName: true,
+                      email: true,
+                      firstName: true,
+                      lastName: true,
+                      avatar: true,
+                      roleName: true,
+                    },
                   },
                 },
               },
             },
-            eventStaffs: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    userName: true,
-                    email: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true,
-                    roleName: true,
-                  },
-                },
-              },
-            },
-          },
-        });
+          });
 
-        return fullEvent;
+          if (fullEvent) {
+            createdEvents.push(fullEvent);
+          }
+        }
+
+        return createdEvents;
       });
 
-      // Gửi thông báo cho organizer khi tạo event thành công
-      // Lấy ownerId từ organizer để gửi notification
-      if (organizer.ownerId && event) {
+      // Gửi thông báo cho organizer khi tạo các event thành công
+      // Chỉ gửi 1 notification (dùng event đầu tiên) để tránh spam nếu có nhiều lần lặp
+      if (organizer.ownerId && events.length > 0) {
+        const firstEvent = events[0];
         this.notificationService
           .notifyEventStatusChange(
             organizer.ownerId,
             {
-              id: event.id,
-              title: event.title,
-              status: 'PENDING',
+              id: firstEvent.id,
+              title: firstEvent.title,
+              status: EventStatus.PENDING,
             },
-            'PENDING',
+            EventStatus.PENDING,
           )
           .catch((error) => {
             console.error(
-              `Failed to send notification to organizer ${organizer.ownerId}:`,
+              `Failed to send notification to organizer ${organizer.ownerId} for event ${firstEvent.id}:`,
               error,
             );
           });
       }
 
       // Gửi thông báo cho admin khi có sự kiện mới ở trạng thái PENDING cần phê duyệt
-      if (event && event.organizer) {
+      // Cũng chỉ gửi 1 notification đại diện (event đầu tiên) kèm totalOccurrences trong payload FE có thể hiển thị
+      if (events.length > 0 && events[0].organizer) {
+        const firstEvent = events[0];
         this.notificationService
           .notifyAdminNewEventPending(
             {
-              id: event.id,
-              title: event.title,
-              status: 'PENDING',
+              id: firstEvent.id,
+              title: firstEvent.title,
+              status: EventStatus.PENDING,
             },
-            event.organizer.name,
+            firstEvent.organizer.name,
           )
           .catch((error) => {
             console.error(
-              `Failed to send notification to admin for new event ${event.id}:`,
+              `Failed to send notification to admin for new event ${firstEvent.id}:`,
               error,
             );
           });
       }
 
       return {
-        ...event,
-        checkinCount: 0, // mới tạo nên chưa có check-in
+        events: events.map((e) => ({
+          ...e,
+          checkinCount: 0,
+        })),
+        totalOccurrences: events.length,
       };
     } catch (error: unknown) {
       if (

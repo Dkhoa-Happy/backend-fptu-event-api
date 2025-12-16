@@ -59,6 +59,14 @@ enum CancellationRequestStatus {
   REJECTED
 }
 
+// Kiểu lặp lại của sự kiện
+enum RecurrenceType {
+  NONE
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 model User {
   id                      Int        @id @default(autoincrement())
   userName                String     @unique @map("user_name")
@@ -188,6 +196,18 @@ model Event {
   status            EventStatus @default(PENDING)
   maxCapacity       Int         @map("max_capacity")
   registeredCount   Int         @default(0) @map("registered_count")
+  /// Sự kiện online (true) hay offline (false - tại venue)
+  isOnline          Boolean     @default(false) @map("is_online")
+  /// Link Google Meet / Zoom / Teams cho sự kiện online
+  onlineMeetingUrl  String?     @map("online_meeting_url")
+  /// Thông tin lặp lại sự kiện
+  recurrenceType    RecurrenceType @default(NONE) @map("recurrence_type")
+  /// Khoảng lặp (ví dụ: 1 = mỗi tuần/tháng, 2 = 2 tuần 1 lần,...)
+  recurrenceInterval Int?       @map("recurrence_interval")
+  /// Ngày kết thúc pattern lặp lại
+  recurrenceEndDate DateTime?   @map("recurrence_end_date")
+  /// Số lần lặp tối đa (nếu không dùng recurrenceEndDate)
+  recurrenceCount   Int?        @map("recurrence_count")
   /// Nếu true: sự kiện public toàn hệ thống (mọi campus đều thấy/join được)
   /// Nếu false: chỉ sinh viên thuộc campus của sự kiện mới thấy (dựa vào campus của venue)
   isGlobal          Boolean     @default(false) @map("is_global")
