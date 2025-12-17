@@ -37,6 +37,7 @@ export class UserService {
         phoneNumber: true,
         gender: true,
         address: true,
+        studentCode: true,
         roleName: true,
         isActive: true,
         createdAt: true,
