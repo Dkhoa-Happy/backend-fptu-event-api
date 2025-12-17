@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiHideProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsEmail,
@@ -21,7 +21,7 @@ export class UpdateUserDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ minLength: 6, example: 'newsecret123' })
+  @ApiHideProperty()
   @IsOptional()
   @IsString()
   @MinLength(6)
@@ -86,5 +86,3 @@ export class UpdateUserDto {
   @IsBoolean()
   isActive?: boolean;
 }
-
-

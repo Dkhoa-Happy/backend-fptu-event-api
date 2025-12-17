@@ -1,4 +1,5 @@
 import { PrismaClient, EventStatus, TicketStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import type { Seeder } from './base.seeder';
 
 export class EventSeeder implements Seeder {
@@ -67,6 +68,16 @@ export class EventSeeder implements Seeder {
     const endTime = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000); // +3 days
 
     const eventsData = [
+      {
+        title: 'Demo event',
+        description:
+          'Sự kiện test để kiểm tra quét mã QR. Sự kiện này luôn bắt đầu vào hôm nay để có thể test check-in.',
+        category: 'Technology',
+        bannerUrl:
+          'https://i.pinimg.com/736x/f0/0e/20/f00e20a1a907882495d85e263ca5ee9e.jpg',
+        offsetDaysStart: 0, // Hôm nay
+        durationHours: 4,
+      },
       {
         title: 'FPT Tech Summit 2025',
         description:
@@ -178,8 +189,19 @@ export class EventSeeder implements Seeder {
       const end = new Date(
         start.getTime() + item.durationHours * 60 * 60 * 1000,
       );
-      const startReg = new Date(start.getTime() - 3 * 24 * 60 * 60 * 1000);
-      const endReg = new Date(start.getTime() - 12 * 60 * 60 * 1000);
+      // For test event (starts today), keep registration open until event starts
+      // For other events, registration ends 12 hours before event starts
+      let startReg: Date;
+      let endReg: Date;
+      if (item.offsetDaysStart === 0) {
+        // Test event: registration starts 3 days ago, ends when event starts
+        startReg = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+        endReg = new Date(start.getTime()); // Ends when event starts
+      } else {
+        // Normal events: registration ends 12 hours before event starts
+        startReg = new Date(start.getTime() - 3 * 24 * 60 * 60 * 1000);
+        endReg = new Date(start.getTime() - 12 * 60 * 60 * 1000);
+      }
 
       const existing = await prisma.event.findFirst({
         where: { title: item.title },
@@ -208,7 +230,83 @@ export class EventSeeder implements Seeder {
         });
         createdEvents.push({ id: newEvent.id, title: newEvent.title });
       } else {
+        // Update time for existing event to always use current date (for test events)
+        // This ensures the event can be tested on any day
+        await prisma.event.update({
+          where: { id: existing.id },
+          data: {
+            startTimeRegister: startReg,
+            endTimeRegister: endReg,
+            startTime: start,
+            endTime: end,
+          },
+        });
         createdEvents.push({ id: existing.id, title: existing.title });
+      }
+    }
+
+    // Create ticket for student to join "Demo event" for testing QR check-in
+    const demoEvent = await prisma.event.findFirst({
+      where: { title: 'Demo event' },
+      select: { id: true, venueId: true, registeredCount: true },
+    });
+
+    if (demoEvent && demoEvent.venueId) {
+      // Check if ticket already exists for this student and event
+      const existingTicket = await prisma.ticket.findFirst({
+        where: {
+          userId: student.id,
+          eventId: demoEvent.id,
+        },
+        select: { id: true },
+      });
+
+      if (!existingTicket) {
+        // Find an available seat that is not booked for this event
+        const seat = await prisma.seat.findFirst({
+          where: {
+            venueId: demoEvent.venueId,
+            isActive: true,
+            tickets: {
+              none: {
+                eventId: demoEvent.id,
+                status: {
+                  in: [TicketStatus.VALID, TicketStatus.USED],
+                },
+              },
+            },
+          },
+          orderBy: { id: 'asc' },
+          select: { id: true },
+        });
+
+        if (seat) {
+          // Generate unique QR code
+          const qrCode = randomUUID();
+
+          // Create ticket and increment registeredCount in transaction
+          await prisma.$transaction(async (tx) => {
+            await tx.ticket.create({
+              data: {
+                qrCode,
+                userId: student.id,
+                eventId: demoEvent.id,
+                seatId: seat.id,
+                status: TicketStatus.VALID,
+              },
+            });
+
+            // Increment registeredCount
+            await tx.event.update({
+              where: { id: demoEvent.id },
+              data: {
+                registeredCount: {
+                  increment: 1,
+                },
+              },
+            });
+          });
+        }
       }
     }
 
@@ -250,6 +348,17 @@ export class EventSeeder implements Seeder {
         });
         createdEvents.push({ id: newEvent.id, title: newEvent.title });
       } else {
+        // Update time for existing event to always use current date (for test events)
+        // This ensures the event can be tested on any day
+        await prisma.event.update({
+          where: { id: existing.id },
+          data: {
+            startTimeRegister: startReg,
+            endTimeRegister: endReg,
+            startTime: start,
+            endTime: end,
+          },
+        });
         createdEvents.push({ id: existing.id, title: existing.title });
       }
     }

@@ -6,8 +6,9 @@ import {
   Req,
   Res,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
@@ -15,7 +16,12 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { Public } from './decorator';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { Public, GetUser } from './decorator';
+import { JwtGuard } from './guard/jwt.guard';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -134,5 +140,110 @@ export class AuthController {
         message: error instanceof Error ? error.message : 'Google login failed',
       });
     }
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password (requires authentication)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Đổi mật khẩu thành công',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Current password is incorrect or unauthorized',
+  })
+  changePassword(
+    @Body() dto: ChangePasswordDto,
+    @GetUser('id') userId: number,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+    return this.authService.changePassword(userId, dto);
+  }
+
+  @Post('forgot-password')
+  @Public()
+  @ApiOperation({ summary: 'Request OTP code via email for password reset' })
+  @ApiResponse({
+    status: 200,
+    description: 'If email exists, OTP code will be sent',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example:
+            'Nếu email tồn tại trong hệ thống, bạn sẽ nhận được mã OTP để đặt lại mật khẩu.',
+        },
+      },
+    },
+  })
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('verify-otp')
+  @Public()
+  @ApiOperation({ summary: 'Verify OTP code before resetting password' })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'OTP hợp lệ. Bạn có thể đặt lại mật khẩu.',
+        },
+        verified: {
+          type: 'boolean',
+          example: true,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or expired OTP',
+  })
+  verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto);
+  }
+
+  @Post('reset-password')
+  @Public()
+  @ApiOperation({ summary: 'Reset password using OTP code from email' })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example:
+            'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới.',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or expired OTP',
+  })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 }

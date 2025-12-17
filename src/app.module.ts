@@ -14,6 +14,7 @@ import { SeatModule } from './seat/seat.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { NotificationModule } from './notification/notification.module';
 import { IncidentModule } from './incident/incident.module';
+import { OrganizerRequestModule } from './organizer-request/organizer-request.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { IncidentModule } from './incident/incident.module';
     FeedbackModule,
     NotificationModule,
     IncidentModule,
+    OrganizerRequestModule,
   ],
 })
 export class AppModule {}

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { EventStatus, TicketStatus } from '@prisma/client';
+import { EventStatus, TicketStatus, RecurrenceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventSummaryService } from './event-summary.service';
 import { NotificationService } from '../notification/notification.service';
@@ -17,6 +17,9 @@ import {
   QueryEventDto,
   AssignStaffDto,
   QueryEventStatsDto,
+  RequestCancellationDto,
+  ApproveCancellationDto,
+  QueryCancellationRequestsDto,
 } from './dto';
 
 @Injectable()
@@ -32,6 +35,94 @@ export class EventService {
     dto: CreateEventDto,
     currentUser?: { id?: number; roleName?: string },
   ) {
+    // Build recurrence occurrences (từng lần tổ chức)
+    const baseStartTime = new Date(dto.startTime);
+    const baseEndTime = new Date(dto.endTime);
+
+    type Occurrence = { startTime: Date; endTime: Date };
+
+    const occurrences: Occurrence[] = [
+      { startTime: baseStartTime, endTime: baseEndTime },
+    ];
+
+    const recurrenceType =
+      (dto.recurrenceType as RecurrenceType | undefined) ?? RecurrenceType.NONE;
+
+    const recurrenceInterval = dto.recurrenceInterval ?? 1;
+    const recurrenceEndDate = dto.recurrenceEndDate
+      ? new Date(dto.recurrenceEndDate)
+      : undefined;
+    const recurrenceCount = dto.recurrenceCount;
+
+    if (
+      recurrenceType !== RecurrenceType.NONE &&
+      recurrenceType !== undefined
+    ) {
+      if (recurrenceInterval < 1) {
+        throw new BadRequestException(
+          'recurrenceInterval phải lớn hơn hoặc bằng 1 khi có recurrenceType',
+        );
+      }
+
+      if (!recurrenceEndDate && !recurrenceCount) {
+        throw new BadRequestException(
+          'Cần truyền recurrenceEndDate hoặc recurrenceCount khi sử dụng recurrenceType',
+        );
+      }
+
+      let currentStart = new Date(baseStartTime);
+      let currentEnd = new Date(baseEndTime);
+      let iterations = 0;
+      const maxIterations = 365; // Guard để tránh loop vô hạn
+
+      while (true) {
+        iterations += 1;
+        if (iterations > maxIterations) {
+          throw new BadRequestException(
+            'Quá nhiều lần lặp. Vui lòng giảm recurrenceInterval hoặc giới hạn bằng recurrenceEndDate / recurrenceCount',
+          );
+        }
+
+        const nextStart = new Date(currentStart);
+        const nextEnd = new Date(currentEnd);
+
+        switch (recurrenceType) {
+          case RecurrenceType.WEEKLY:
+            nextStart.setDate(nextStart.getDate() + 7 * recurrenceInterval);
+            nextEnd.setDate(nextEnd.getDate() + 7 * recurrenceInterval);
+            break;
+          case RecurrenceType.MONTHLY:
+            nextStart.setMonth(nextStart.getMonth() + recurrenceInterval);
+            nextEnd.setMonth(nextEnd.getMonth() + recurrenceInterval);
+            break;
+          case RecurrenceType.YEARLY:
+            nextStart.setFullYear(nextStart.getFullYear() + recurrenceInterval);
+            nextEnd.setFullYear(nextEnd.getFullYear() + recurrenceInterval);
+            break;
+          default:
+            // Nếu là NONE thì không vào đây, nhưng để fallback an toàn
+            iterations = maxIterations + 1;
+            continue;
+        }
+
+        if (recurrenceEndDate && nextStart > recurrenceEndDate) {
+          break;
+        }
+
+        if (
+          typeof recurrenceCount === 'number' &&
+          recurrenceCount > 0 &&
+          occurrences.length >= recurrenceCount
+        ) {
+          break;
+        }
+
+        occurrences.push({ startTime: nextStart, endTime: nextEnd });
+        currentStart = nextStart;
+        currentEnd = nextEnd;
+      }
+    }
+
     // Validate organizer exists and check permissions
     const organizer = await this.prisma.organizer.findUnique({
       where: { id: dto.organizerId },
@@ -94,7 +185,7 @@ export class EventService {
     if (dto.venueId) {
       const venue = await this.prisma.venue.findUnique({
         where: { id: dto.venueId },
-        select: { id: true, status: true, campusId: true },
+        select: { id: true, status: true, campusId: true, capacity: true },
       });
 
       if (!venue) {
@@ -116,6 +207,19 @@ export class EventService {
       ) {
         throw new BadRequestException(
           `Organizer và venue phải cùng campus. Organizer thuộc campus ID ${organizer.campusId}, nhưng venue thuộc campus ID ${venue.campusId}.`,
+        );
+      }
+
+      // Validate maxCapacity không vượt quá capacity của venue (nếu có)
+      if (
+        typeof dto.maxCapacity === 'number' &&
+        dto.maxCapacity > 0 &&
+        typeof venue.capacity === 'number' &&
+        venue.capacity > 0 &&
+        dto.maxCapacity > venue.capacity
+      ) {
+        throw new BadRequestException(
+          `Sức chứa sự kiện (maxCapacity = ${dto.maxCapacity}) không được vượt quá sức chứa venue (${venue.capacity}).`,
         );
       }
 
@@ -176,11 +280,9 @@ export class EventService {
     }
 
     // Validate time relationships
-    const startTime = new Date(dto.startTime);
-    const endTime = new Date(dto.endTime);
-    const startTimeRegister = new Date(dto.startTimeRegister);
-    const endTimeRegister = new Date(dto.endTimeRegister);
-    const now = new Date();
+    const startTime = baseStartTime;
+    const endTime = baseEndTime;
+    const isOnline = dto.isOnline ?? false;
 
     // Check if startTime is before endTime
     if (startTime >= endTime) {
@@ -189,25 +291,44 @@ export class EventService {
       );
     }
 
-    // Check if startTimeRegister is before endTimeRegister
-    if (startTimeRegister >= endTimeRegister) {
-      throw new BadRequestException(
-        'Thời gian bắt đầu đăng ký phải trước thời gian kết thúc đăng ký',
-      );
-    }
+    // For online events, registration times and maxCapacity are optional
+    // For offline events, registration times and maxCapacity are required
+    if (!isOnline) {
+      if (!dto.startTimeRegister || !dto.endTimeRegister) {
+        throw new BadRequestException(
+          'Sự kiện offline cần có thời gian bắt đầu và kết thúc đăng ký',
+        );
+      }
 
-    // Check if registration ends before event starts
-    if (endTimeRegister >= startTime) {
-      throw new BadRequestException(
-        'Thời gian kết thúc đăng ký phải trước khi sự kiện bắt đầu',
-      );
-    }
+      if (!dto.maxCapacity) {
+        throw new BadRequestException(
+          'Sự kiện offline cần có sức chứa tối đa (maxCapacity)',
+        );
+      }
 
-    // Check if registration start is before event start
-    if (startTimeRegister >= startTime) {
-      throw new BadRequestException(
-        'Thời gian bắt đầu đăng ký phải trước thời gian bắt đầu sự kiện',
-      );
+      const startTimeRegister = new Date(dto.startTimeRegister);
+      const endTimeRegister = new Date(dto.endTimeRegister);
+
+      // Check if startTimeRegister is before endTimeRegister
+      if (startTimeRegister >= endTimeRegister) {
+        throw new BadRequestException(
+          'Thời gian bắt đầu đăng ký phải trước thời gian kết thúc đăng ký',
+        );
+      }
+
+      // Check if registration ends before event starts
+      if (endTimeRegister >= startTime) {
+        throw new BadRequestException(
+          'Thời gian kết thúc đăng ký phải trước khi sự kiện bắt đầu',
+        );
+      }
+
+      // Check if registration start is before event start
+      if (startTimeRegister >= startTime) {
+        throw new BadRequestException(
+          'Thời gian bắt đầu đăng ký phải trước thời gian bắt đầu sự kiện',
+        );
+      }
     }
 
     // Optional: Check if event is in the past (you may want to allow this for testing)
@@ -260,74 +381,74 @@ export class EventService {
       }
 
       // Check for staff time conflicts with existing events
-      const startTime = new Date(dto.startTime);
-      const endTime = new Date(dto.endTime);
       for (const staffId of staffIds) {
-        const conflictingAssignments = await this.prisma.eventStaff.findMany({
-          where: {
-            userId: staffId,
-            event: {
-              status: {
-                in: [EventStatus.PUBLISHED, EventStatus.PENDING],
-              },
-              // Check if time ranges overlap
-              OR: [
-                // New event starts during existing event
-                {
-                  AND: [
-                    { startTime: { lte: startTime } },
-                    { endTime: { gt: startTime } },
-                  ],
+        for (const occ of occurrences) {
+          const conflictingAssignments = await this.prisma.eventStaff.findMany({
+            where: {
+              userId: staffId,
+              event: {
+                status: {
+                  in: [EventStatus.PUBLISHED, EventStatus.PENDING],
                 },
-                // New event ends during existing event
-                {
-                  AND: [
-                    { startTime: { lt: endTime } },
-                    { endTime: { gte: endTime } },
-                  ],
-                },
-                // New event completely contains existing event
-                {
-                  AND: [
-                    { startTime: { gte: startTime } },
-                    { endTime: { lte: endTime } },
-                  ],
-                },
-                // Existing event completely contains new event
-                {
-                  AND: [
-                    { startTime: { lte: startTime } },
-                    { endTime: { gte: endTime } },
-                  ],
-                },
-              ],
-            },
-          },
-          include: {
-            event: {
-              select: {
-                id: true,
-                title: true,
-                startTime: true,
-                endTime: true,
-                status: true,
+                // Check if time ranges overlap
+                OR: [
+                  // New event starts during existing event
+                  {
+                    AND: [
+                      { startTime: { lte: occ.startTime } },
+                      { endTime: { gt: occ.startTime } },
+                    ],
+                  },
+                  // New event ends during existing event
+                  {
+                    AND: [
+                      { startTime: { lt: occ.endTime } },
+                      { endTime: { gte: occ.endTime } },
+                    ],
+                  },
+                  // New event completely contains existing event
+                  {
+                    AND: [
+                      { startTime: { gte: occ.startTime } },
+                      { endTime: { lte: occ.endTime } },
+                    ],
+                  },
+                  // Existing event completely contains new event
+                  {
+                    AND: [
+                      { startTime: { lte: occ.startTime } },
+                      { endTime: { gte: occ.endTime } },
+                    ],
+                  },
+                ],
               },
             },
-            user: {
-              select: {
-                id: true,
-                userName: true,
+            include: {
+              event: {
+                select: {
+                  id: true,
+                  title: true,
+                  startTime: true,
+                  endTime: true,
+                  status: true,
+                },
+              },
+              user: {
+                select: {
+                  id: true,
+                  userName: true,
+                },
               },
             },
-          },
-        });
+          });
 
-        if (conflictingAssignments.length > 0) {
-          const conflictingEvent = conflictingAssignments[0].event;
-          const staffUser = conflictingAssignments[0].user;
-          throw new BadRequestException(
-            `Staff ${staffUser.userName} (ID: ${staffId}) đã được phân công cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Không thể phân công cùng lúc cho nhiều sự kiện trong cùng khoảng thời gian.`,
-          );
+          if (conflictingAssignments.length > 0) {
+            const conflictingEvent = conflictingAssignments[0].event;
+            const staffUser = conflictingAssignments[0].user;
+            throw new BadRequestException(
+              `Staff ${staffUser.userName} (ID: ${staffId}) đã được phân công cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Không thể phân công cùng lúc cho nhiều sự kiện trong cùng khoảng thời gian.`,
+            );
+          }
         }
       }
     }
@@ -348,200 +469,261 @@ export class EventService {
       }
 
       // Check for speaker time conflicts with existing events
-      const startTime = new Date(dto.startTime);
-      const endTime = new Date(dto.endTime);
       for (const speakerId of speakerIds) {
-        const conflictingAssignment = await this.prisma.eventSpeaker.findFirst({
-          where: {
-            speakerId: speakerId,
-            event: {
-              status: {
-                in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+        for (const occ of occurrences) {
+          const conflictingAssignment =
+            await this.prisma.eventSpeaker.findFirst({
+              where: {
+                speakerId: speakerId,
+                event: {
+                  status: {
+                    in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+                  },
+                  OR: [
+                    {
+                      AND: [
+                        { startTime: { lte: occ.startTime } },
+                        { endTime: { gt: occ.startTime } },
+                      ],
+                    },
+                    {
+                      AND: [
+                        { startTime: { lt: occ.endTime } },
+                        { endTime: { gte: occ.endTime } },
+                      ],
+                    },
+                    {
+                      AND: [
+                        { startTime: { gte: occ.startTime } },
+                        { endTime: { lte: occ.endTime } },
+                      ],
+                    },
+                    {
+                      AND: [
+                        { startTime: { lte: occ.startTime } },
+                        { endTime: { gte: occ.endTime } },
+                      ],
+                    },
+                  ],
+                },
               },
-              OR: [
-                {
-                  AND: [
-                    { startTime: { lte: startTime } },
-                    { endTime: { gt: startTime } },
-                  ],
+              include: {
+                event: {
+                  select: {
+                    id: true,
+                    title: true,
+                    startTime: true,
+                    endTime: true,
+                  },
                 },
-                {
-                  AND: [
-                    { startTime: { lt: endTime } },
-                    { endTime: { gte: endTime } },
-                  ],
+                speaker: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
                 },
-                {
-                  AND: [
-                    { startTime: { gte: startTime } },
-                    { endTime: { lte: endTime } },
-                  ],
-                },
-                {
-                  AND: [
-                    { startTime: { lte: startTime } },
-                    { endTime: { gte: endTime } },
-                  ],
-                },
-              ],
-            },
-          },
-          include: {
-            event: {
-              select: {
-                id: true,
-                title: true,
-                startTime: true,
-                endTime: true,
               },
-            },
-            speaker: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        });
+            });
 
-        if (conflictingAssignment) {
-          throw new BadRequestException(
-            `Speaker ${conflictingAssignment.speaker.name} (ID: ${speakerId}) đã được phân công cho sự kiện "${conflictingAssignment.event.title}" từ ${new Date(conflictingAssignment.event.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingAssignment.event.endTime).toLocaleString('vi-VN')}. Không thể phân công trùng lịch.`,
-          );
+          if (conflictingAssignment) {
+            throw new BadRequestException(
+              `Speaker ${conflictingAssignment.speaker.name} (ID: ${speakerId}) đã được phân công cho sự kiện "${conflictingAssignment.event.title}" từ ${new Date(conflictingAssignment.event.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingAssignment.event.endTime).toLocaleString('vi-VN')}. Không thể phân công trùng lịch.`,
+            );
+          }
         }
       }
     }
 
     try {
-      const event = await this.prisma.$transaction(async (tx) => {
-        const createdEvent = await tx.event.create({
-          data: {
-            title: dto.title,
-            description: dto.description,
-            category: dto.category,
-            bannerUrl: dto.bannerUrl,
-            startTime: new Date(dto.startTime),
-            endTime: new Date(dto.endTime),
-            startTimeRegister: new Date(dto.startTimeRegister),
-            endTimeRegister: new Date(dto.endTimeRegister),
-            status: 'PENDING',
-            maxCapacity: dto.maxCapacity,
-            isGlobal: dto.isGlobal ?? false,
-            organizerId: dto.organizerId,
-            venueId: dto.venueId,
-            hostId,
-          },
-        });
+      const events: any[] = await this.prisma.$transaction(async (tx) => {
+        const createdEvents: any[] = [];
 
-        if (staffIds.length > 0) {
-          await tx.eventStaff.createMany({
-            data: staffIds.map((userId) => ({
-              eventId: createdEvent.id,
-              userId,
-            })),
-            skipDuplicates: true,
+        for (const occ of occurrences) {
+          const createdEvent = await tx.event.create({
+            data: {
+              title: dto.title,
+              description: dto.description,
+              category: dto.category,
+              bannerUrl: dto.bannerUrl,
+              startTime: occ.startTime,
+              endTime: occ.endTime,
+              startTimeRegister: isOnline
+                ? null
+                : dto.startTimeRegister
+                  ? new Date(dto.startTimeRegister)
+                  : null,
+              endTimeRegister: isOnline
+                ? null
+                : dto.endTimeRegister
+                  ? new Date(dto.endTimeRegister)
+                  : null,
+              status: EventStatus.PENDING,
+              maxCapacity: isOnline
+                ? null
+                : dto.maxCapacity !== undefined
+                  ? dto.maxCapacity
+                  : null,
+              isGlobal: dto.isGlobal ?? false,
+              organizerId: dto.organizerId,
+              venueId: dto.venueId,
+              hostId,
+              isOnline: dto.isOnline ?? false,
+              onlineMeetingUrl: dto.onlineMeetingUrl,
+              recurrenceType,
+              recurrenceInterval:
+                recurrenceType === RecurrenceType.NONE
+                  ? null
+                  : recurrenceInterval,
+              recurrenceEndDate:
+                recurrenceType === RecurrenceType.NONE || !recurrenceEndDate
+                  ? null
+                  : recurrenceEndDate,
+              recurrenceCount:
+                recurrenceType === RecurrenceType.NONE || !recurrenceCount
+                  ? null
+                  : recurrenceCount,
+            },
           });
-        }
 
-        if (speakers.length > 0) {
-          await tx.eventSpeaker.createMany({
-            data: speakers.map((s) => ({
-              eventId: createdEvent.id,
-              speakerId: s.speakerId,
-              topic: s.topic,
-            })),
-            skipDuplicates: true,
-          });
-        }
+          if (staffIds.length > 0) {
+            await tx.eventStaff.createMany({
+              data: staffIds.map((userId) => ({
+                eventId: createdEvent.id,
+                userId,
+              })),
+              skipDuplicates: true,
+            });
+          }
 
-        const fullEvent = await tx.event.findUnique({
-          where: { id: createdEvent.id },
-          include: {
-            organizer: {
-              select: {
-                id: true,
-                name: true,
-                description: true,
-                contactEmail: true,
-                logoUrl: true,
+          if (speakers.length > 0) {
+            await tx.eventSpeaker.createMany({
+              data: speakers.map((s) => ({
+                eventId: createdEvent.id,
+                speakerId: s.speakerId,
+                topic: s.topic,
+              })),
+              skipDuplicates: true,
+            });
+          }
+
+          const fullEvent = await tx.event.findUnique({
+            where: { id: createdEvent.id },
+            include: {
+              organizer: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  contactEmail: true,
+                  logoUrl: true,
+                },
               },
-            },
-            venue: {
-              select: {
-                id: true,
-                name: true,
-                location: true,
-                hasSeats: true,
+              venue: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                  hasSeats: true,
+                },
               },
-            },
-            host: {
-              select: {
-                id: true,
-                userName: true,
-                email: true,
-                firstName: true,
-                lastName: true,
+              host: {
+                select: {
+                  id: true,
+                  userName: true,
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                },
               },
-            },
-            eventSpeakers: {
-              include: {
-                speaker: {
-                  select: {
-                    id: true,
-                    name: true,
-                    bio: true,
-                    avatar: true,
-                    type: true,
-                    company: true,
+              eventSpeakers: {
+                include: {
+                  speaker: {
+                    select: {
+                      id: true,
+                      name: true,
+                      bio: true,
+                      avatar: true,
+                      type: true,
+                      company: true,
+                    },
+                  },
+                },
+              },
+              eventStaffs: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      userName: true,
+                      email: true,
+                      firstName: true,
+                      lastName: true,
+                      avatar: true,
+                      roleName: true,
+                    },
                   },
                 },
               },
             },
-            eventStaffs: {
-              include: {
-                user: {
-                  select: {
-                    id: true,
-                    userName: true,
-                    email: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true,
-                    roleName: true,
-                  },
-                },
-              },
-            },
-          },
-        });
+          });
 
-        return fullEvent;
+          if (fullEvent) {
+            createdEvents.push(fullEvent);
+          }
+        }
+
+        return createdEvents;
       });
 
-      // Gửi thông báo cho organizer khi tạo event thành công
-      // Lấy ownerId từ organizer để gửi notification
-      if (organizer.ownerId && event) {
+      // Gửi thông báo cho organizer khi tạo các event thành công
+      // Chỉ gửi 1 notification (dùng event đầu tiên) để tránh spam nếu có nhiều lần lặp
+      if (organizer.ownerId && events.length > 0) {
+        const firstEvent = events[0];
         this.notificationService
           .notifyEventStatusChange(
             organizer.ownerId,
             {
-              id: event.id,
-              title: event.title,
-              status: 'PENDING',
+              id: firstEvent.id,
+              title: firstEvent.title,
+              status: EventStatus.PENDING,
             },
-            'PENDING',
+            EventStatus.PENDING,
           )
           .catch((error) => {
             console.error(
-              `Failed to send notification to organizer ${organizer.ownerId}:`,
+              `Failed to send notification to organizer ${organizer.ownerId} for event ${firstEvent.id}:`,
+              error,
+            );
+          });
+      }
+
+      // Gửi thông báo cho admin khi có sự kiện mới ở trạng thái PENDING cần phê duyệt
+      // Cũng chỉ gửi 1 notification đại diện (event đầu tiên) kèm totalOccurrences trong payload FE có thể hiển thị
+      if (events.length > 0 && events[0].organizer) {
+        const firstEvent = events[0];
+        this.notificationService
+          .notifyAdminNewEventPending(
+            {
+              id: firstEvent.id,
+              title: firstEvent.title,
+              status: EventStatus.PENDING,
+            },
+            firstEvent.organizer.name,
+          )
+          .catch((error) => {
+            console.error(
+              `Failed to send notification to admin for new event ${firstEvent.id}:`,
               error,
             );
           });
       }
 
       return {
-        ...event,
-        checkinCount: 0, // mới tạo nên chưa có check-in
+        events: events.map((e) => ({
+          ...e,
+          checkinCount: 0,
+        })),
+        totalOccurrences: events.length,
       };
     } catch (error: unknown) {
       if (
@@ -607,7 +789,15 @@ export class EventService {
         const visibilityCondition: Prisma.EventWhereInput = {
           OR: [
             { isGlobal: true },
+            { isOnline: true }, // Online events có thể tham gia từ bất kỳ đâu
             { venue: { campusId: currentUser.campusId } },
+            {
+              // Online events thuộc organizer cùng campus hoặc organizer không có campus (global)
+              isOnline: true,
+              organizer: {
+                OR: [{ campusId: currentUser.campusId }, { campusId: null }],
+              },
+            },
           ],
         };
 
@@ -624,7 +814,18 @@ export class EventService {
     // Nếu là staff: cũng chỉ thấy event global hoặc event thuộc campus của mình
     if (currentUser?.roleName === 'staff' && currentUser.campusId) {
       const visibilityCondition: Prisma.EventWhereInput = {
-        OR: [{ isGlobal: true }, { venue: { campusId: currentUser.campusId } }],
+        OR: [
+          { isGlobal: true },
+          { isOnline: true }, // Online events có thể tham gia từ bất kỳ đâu
+          { venue: { campusId: currentUser.campusId } },
+          {
+            // Online events thuộc organizer cùng campus hoặc organizer không có campus (global)
+            isOnline: true,
+            organizer: {
+              OR: [{ campusId: currentUser.campusId }, { campusId: null }],
+            },
+          },
+        ],
       };
 
       if (where.AND) {
@@ -681,6 +882,7 @@ export class EventService {
               email: true,
               firstName: true,
               lastName: true,
+              avatar: true,
             },
           },
           eventSpeakers: {
@@ -762,6 +964,7 @@ export class EventService {
             description: true,
             contactEmail: true,
             logoUrl: true,
+            campusId: true, // Thêm campusId để check visibility cho online events
           },
         },
         venue: {
@@ -788,6 +991,7 @@ export class EventService {
             email: true,
             firstName: true,
             lastName: true,
+            avatar: true,
           },
         },
         eventSpeakers: {
@@ -821,6 +1025,15 @@ export class EventService {
                       lastName: true,
                       avatar: true,
                       roleName: true,
+                      isActive: true,
+                      campus: {
+                        select: {
+                          id: true,
+                          name: true,
+                          code: true,
+                          address: true,
+                        },
+                      },
                     },
                   },
                 },
@@ -840,7 +1053,9 @@ export class EventService {
     if (currentUser?.roleName === 'student' && currentUser.campusId) {
       const isSameCampus =
         event.venue && event.venue.campusId === currentUser.campusId;
-      if (!event.isGlobal && !isSameCampus) {
+      const isOnlineEvent = event.isOnline;
+      // Cho phép nếu: global, venue cùng campus, hoặc online event (có thể tham gia từ bất kỳ đâu)
+      if (!event.isGlobal && !isSameCampus && !isOnlineEvent) {
         throw new ForbiddenException('Bạn không có quyền truy cập sự kiện này');
       }
     }
@@ -849,7 +1064,9 @@ export class EventService {
     if (currentUser?.roleName === 'staff' && currentUser.campusId) {
       const isSameCampus =
         event.venue && event.venue.campusId === currentUser.campusId;
-      if (!event.isGlobal && !isSameCampus) {
+      const isOnlineEvent = event.isOnline;
+      // Cho phép nếu: global, venue cùng campus, hoặc online event (có thể tham gia từ bất kỳ đâu)
+      if (!event.isGlobal && !isSameCampus && !isOnlineEvent) {
         throw new ForbiddenException('Bạn không có quyền truy cập sự kiện này');
       }
     }
@@ -926,6 +1143,15 @@ export class EventService {
                       lastName: true,
                       avatar: true,
                       roleName: true,
+                      isActive: true,
+                      campus: {
+                        select: {
+                          id: true,
+                          name: true,
+                          code: true,
+                          address: true,
+                        },
+                      },
                     },
                   },
                 },
@@ -1081,10 +1307,18 @@ export class EventService {
       }
     }
 
+    // Validate registration times (only for offline events)
     if (
       dto.startTimeRegister !== undefined ||
       dto.endTimeRegister !== undefined
     ) {
+      // Both must be provided and not null for offline events
+      if (!finalStartTimeRegister || !finalEndTimeRegister) {
+        throw new BadRequestException(
+          'Sự kiện offline cần có thời gian bắt đầu và kết thúc đăng ký',
+        );
+      }
+
       if (finalStartTimeRegister >= finalEndTimeRegister) {
         throw new BadRequestException(
           'Thời gian bắt đầu đăng ký phải trước thời gian kết thúc đăng ký',
@@ -1092,8 +1326,11 @@ export class EventService {
       }
     }
 
-    // Check if registration ends before event starts
-    if (dto.endTimeRegister !== undefined || dto.startTime !== undefined) {
+    // Check if registration ends before event starts (only if registration times exist)
+    if (
+      (dto.endTimeRegister !== undefined || dto.startTime !== undefined) &&
+      finalEndTimeRegister
+    ) {
       if (finalEndTimeRegister >= finalStartTime) {
         throw new BadRequestException(
           'Thời gian kết thúc đăng ký phải trước khi sự kiện bắt đầu',
@@ -1101,8 +1338,11 @@ export class EventService {
       }
     }
 
-    // Check if registration start is before event start
-    if (dto.startTimeRegister !== undefined || dto.startTime !== undefined) {
+    // Check if registration start is before event start (only if registration times exist)
+    if (
+      (dto.startTimeRegister !== undefined || dto.startTime !== undefined) &&
+      finalStartTimeRegister
+    ) {
       if (finalStartTimeRegister >= finalStartTime) {
         throw new BadRequestException(
           'Thời gian bắt đầu đăng ký phải trước thời gian bắt đầu sự kiện',
@@ -1496,6 +1736,7 @@ export class EventService {
 
   async cancelEvent(
     id: string,
+    dto: RequestCancellationDto,
     currentUser: { userId: number; roleName: string },
   ) {
     try {
@@ -1519,225 +1760,95 @@ export class EventService {
         throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
       }
 
-      // Check permissions
-      const isAdmin = currentUser.roleName === 'admin';
+      // Check permissions - only organizer owner can request cancellation
       const isOrganizerOwner =
         currentUser.roleName === 'event_organizer' &&
         event.organizer.ownerId === currentUser.userId;
 
-      if (!isAdmin && !isOrganizerOwner) {
+      if (!isOrganizerOwner) {
         throw new ForbiddenException(
-          'Bạn không có quyền hủy sự kiện này. Chỉ admin hoặc chủ sở hữu organizer mới có thể hủy sự kiện.',
+          'Bạn không có quyền yêu cầu hủy sự kiện này. Chỉ chủ sở hữu organizer mới có thể yêu cầu hủy sự kiện.',
         );
       }
 
-      // Only allow canceling PUBLISHED events
+      // Only allow requesting cancellation for PUBLISHED events
       if (event.status !== EventStatus.PUBLISHED) {
         throw new BadRequestException(
-          `Không thể hủy sự kiện này. Chỉ có thể hủy sự kiện đã được PUBLISHED. Trạng thái hiện tại: ${event.status}`,
+          `Không thể yêu cầu hủy sự kiện này. Chỉ có thể yêu cầu hủy sự kiện đã được PUBLISHED. Trạng thái hiện tại: ${event.status}`,
         );
       }
 
-      // Use transaction to ensure data consistency
-      return await this.prisma.$transaction(async (tx) => {
-        // Get all users who registered for this event (BEFORE cancelling tickets)
-        // to send notifications and emails
-        const registeredUsers = await tx.ticket.findMany({
+      // Check if there's already a PENDING cancellation request
+      const existingRequest =
+        await this.prisma.eventCancellationRequest.findFirst({
           where: {
             eventId: id,
-            status: TicketStatus.VALID, // Only get valid tickets
-          },
-          select: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
+            status: 'PENDING',
           },
         });
 
-        // Get event details for email/notification
-        const eventDetails = await tx.event.findUnique({
-          where: { id },
-          select: {
-            id: true,
-            title: true,
-            startTime: true,
-            endTime: true,
-          },
-        });
+      if (existingRequest) {
+        throw new BadRequestException(
+          'Đã có yêu cầu hủy sự kiện đang chờ phê duyệt. Vui lòng chờ admin xem xét.',
+        );
+      }
 
-        // Update event status to CANCELED
-        const updatedEvent = await tx.event.update({
-          where: { id },
+      // Create cancellation request
+      const cancellationRequest =
+        await this.prisma.eventCancellationRequest.create({
           data: {
-            status: EventStatus.CANCELED,
+            eventId: id,
+            requestedBy: currentUser.userId,
+            reason: dto.reason,
+            status: 'PENDING',
           },
           include: {
-            organizer: {
+            event: {
               select: {
                 id: true,
-                name: true,
-                description: true,
-                contactEmail: true,
-                logoUrl: true,
+                title: true,
               },
             },
-            venue: {
+            requester: {
               select: {
                 id: true,
-                name: true,
-                location: true,
-                hasSeats: true,
-                campusId: true,
-                campus: {
-                  select: {
-                    id: true,
-                    name: true,
-                    code: true,
-                    address: true,
-                  },
-                },
-              },
-            },
-            host: {
-              select: {
-                id: true,
-                userName: true,
-                email: true,
                 firstName: true,
                 lastName: true,
+                email: true,
               },
             },
           },
         });
 
-        // Cancel all tickets for this event (only VALID tickets)
-        const cancelledTickets = await tx.ticket.updateMany({
-          where: {
-            eventId: id,
-            status: TicketStatus.VALID, // Only cancel valid tickets
-          },
-          data: {
-            status: TicketStatus.CANCELLED,
-          },
+      // Send notification to all admins
+      this.notificationService
+        .notifyCancellationRequestToAdmins({
+          eventId: id,
+          eventTitle: event.title,
+          organizerName:
+            `${cancellationRequest.requester.firstName || ''} ${cancellationRequest.requester.lastName || ''}`.trim() ||
+            'Organizer',
+          reason: dto.reason,
+          requestId: cancellationRequest.id,
+        })
+        .catch((error) => {
+          console.error(
+            `Failed to send cancellation request notification to admins for event ${id}:`,
+            error,
+          );
         });
 
-        // Free all seats that were booked for this event
-        // Get all tickets with seats for this event
-        const ticketsWithSeats = await tx.ticket.findMany({
-          where: {
-            eventId: id,
-            seatId: { not: null },
-          },
-          select: {
-            seatId: true,
-          },
-        });
-
-        // Get unique seat IDs
-        const seatIds = [
-          ...new Set(
-            ticketsWithSeats
-              .map((t) => t.seatId)
-              .filter((id): id is number => id !== null),
-          ),
-        ];
-
-        // Free all seats
-        if (seatIds.length > 0) {
-          await tx.seat.updateMany({
-            where: {
-              id: { in: seatIds },
-            },
-            data: {
-              isBooked: false,
-            },
-          });
-        }
-
-        // Remove all staff assignments for this event
-        const removedStaff = await tx.eventStaff.deleteMany({
-          where: {
-            eventId: id,
-          },
-        });
-
-        // Remove all speaker assignments for this event
-        const removedSpeakers = await tx.eventSpeaker.deleteMany({
-          where: {
-            eventId: id,
-          },
-        });
-
-        // Note: registeredCount is not decremented because we want to keep the record
-        // of how many people registered before cancellation
-
-        // Send notification to organizer
-        if (event.organizer.ownerId) {
-          this.notificationService
-            .notifyEventStatusChange(
-              event.organizer.ownerId,
-              {
-                id: updatedEvent.id,
-                title: updatedEvent.title,
-                status: EventStatus.CANCELED,
-              },
-              EventStatus.CANCELED,
-            )
-            .catch((error) => {
-              console.error(
-                `Failed to send notification to organizer ${event.organizer.ownerId}:`,
-                error,
-              );
-            });
-        }
-
-        // Send notification to all registered users via OneSignal
-        this.notificationService
-          .notifyEventCancelledToAttendees(id, updatedEvent.title)
-          .catch((error) => {
-            console.error(
-              `Failed to send cancellation notification to attendees for event ${id}:`,
-              error,
-            );
-          });
-
-        // Send email to all registered users
-        const uniqueUsers = Array.from(
-          new Map(registeredUsers.map((t) => [t.user.id, t.user])).values(),
-        );
-
-        for (const user of uniqueUsers) {
-          this.emailService
-            .sendEventCancellationEmail({
-              email: user.email,
-              fullName:
-                `${user.firstName || ''} ${user.lastName || ''}`.trim() ||
-                'Bạn',
-              eventTitle: eventDetails?.title || updatedEvent.title,
-              eventStartTime: eventDetails?.startTime,
-            })
-            .catch((error) => {
-              console.error(
-                `Failed to send cancellation email to user ${user.id} (${user.email}):`,
-                error,
-              );
-            });
-        }
-
-        return {
-          ...updatedEvent,
-          message: 'Sự kiện đã được hủy thành công',
-          cancelledTicketsCount: cancelledTickets.count,
-          freedSeatsCount: seatIds.length,
-          removedStaffCount: removedStaff.count,
-          removedSpeakersCount: removedSpeakers.count,
-        };
-      });
+      return {
+        message:
+          'Yêu cầu hủy sự kiện đã được gửi. Vui lòng chờ admin phê duyệt.',
+        cancellationRequest: {
+          id: cancellationRequest.id,
+          eventId: cancellationRequest.eventId,
+          reason: cancellationRequest.reason,
+          status: cancellationRequest.status,
+          createdAt: cancellationRequest.createdAt,
+        },
+      };
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -1750,6 +1861,528 @@ export class EventService {
 
       throw error;
     }
+  }
+
+  /**
+   * Admin phê duyệt hoặc từ chối yêu cầu hủy sự kiện
+   */
+  async approveCancellationRequest(
+    requestId: number,
+    dto: ApproveCancellationDto,
+    currentUser: { userId: number; roleName: string },
+  ) {
+    if (currentUser.roleName !== 'admin') {
+      throw new ForbiddenException(
+        'Chỉ admin mới có quyền phê duyệt yêu cầu hủy sự kiện.',
+      );
+    }
+
+    const cancellationRequest =
+      await this.prisma.eventCancellationRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          event: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              startTime: true,
+              endTime: true,
+              organizer: {
+                select: {
+                  ownerId: true,
+                },
+              },
+            },
+          },
+          requester: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+    if (!cancellationRequest) {
+      throw new NotFoundException(
+        `Không tìm thấy yêu cầu hủy sự kiện với ID ${requestId}`,
+      );
+    }
+
+    if (cancellationRequest.status !== 'PENDING') {
+      throw new BadRequestException(
+        `Yêu cầu hủy sự kiện này đã được xử lý. Trạng thái hiện tại: ${cancellationRequest.status}`,
+      );
+    }
+
+    // Update cancellation request status
+    const updatedRequest = await this.prisma.eventCancellationRequest.update({
+      where: { id: requestId },
+      data: {
+        status: dto.status,
+        reviewedBy: currentUser.userId,
+        reviewedAt: new Date(),
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            startTime: true,
+            endTime: true,
+            organizer: {
+              select: {
+                ownerId: true,
+              },
+            },
+          },
+        },
+        requester: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // If approved, actually cancel the event
+    if (dto.status === 'APPROVED') {
+      await this.processCancellation(
+        cancellationRequest.event.id,
+        cancellationRequest.reason,
+      );
+    } else {
+      // If rejected, send notification and email to organizer
+      const organizerOwnerId = cancellationRequest.event.organizer.ownerId;
+      if (organizerOwnerId) {
+        this.notificationService
+          .notifyCancellationRequestRejected({
+            organizerOwnerId,
+            eventId: cancellationRequest.event.id,
+            eventTitle: cancellationRequest.event.title,
+            adminNote: dto.adminNote,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to send rejection notification to organizer ${organizerOwnerId}:`,
+              error,
+            );
+          });
+
+        // Get organizer owner email
+        const organizerOwner = await this.prisma.user.findUnique({
+          where: { id: organizerOwnerId },
+          select: { email: true, firstName: true, lastName: true },
+        });
+
+        if (organizerOwner) {
+          this.emailService
+            .sendCancellationRequestRejectedEmail({
+              email: organizerOwner.email,
+              fullName:
+                `${organizerOwner.firstName || ''} ${organizerOwner.lastName || ''}`.trim() ||
+                'Bạn',
+              eventTitle: cancellationRequest.event.title,
+              reason: cancellationRequest.reason,
+              adminNote: dto.adminNote,
+            })
+            .catch((error) => {
+              console.error(
+                `Failed to send rejection email to organizer ${organizerOwnerId}:`,
+                error,
+              );
+            });
+        }
+      }
+    }
+
+    return {
+      message:
+        dto.status === 'APPROVED'
+          ? 'Yêu cầu hủy sự kiện đã được phê duyệt. Sự kiện đã được hủy.'
+          : 'Yêu cầu hủy sự kiện đã bị từ chối.',
+      cancellationRequest: updatedRequest,
+    };
+  }
+
+  /**
+   * Thực hiện hủy sự kiện (internal method, được gọi khi admin approve cancellation request)
+   */
+  private async processCancellation(eventId: string, reason?: string) {
+    // Use transaction to ensure data consistency
+    return await this.prisma.$transaction(async (tx) => {
+      // Get all users who registered for this event (BEFORE cancelling tickets)
+      // to send notifications and emails
+      const registeredUsers = await tx.ticket.findMany({
+        where: {
+          eventId: eventId,
+          status: TicketStatus.VALID, // Only get valid tickets
+        },
+        select: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      // Get event details for email/notification
+      const eventDetails = await tx.event.findUnique({
+        where: { id: eventId },
+        select: {
+          id: true,
+          title: true,
+          startTime: true,
+          endTime: true,
+        },
+      });
+
+      // Update event status to CANCELED
+      const updatedEvent = await tx.event.update({
+        where: { id: eventId },
+        data: {
+          status: EventStatus.CANCELED,
+        },
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              contactEmail: true,
+              logoUrl: true,
+            },
+          },
+          venue: {
+            select: {
+              id: true,
+              name: true,
+              location: true,
+              hasSeats: true,
+              campusId: true,
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                  address: true,
+                },
+              },
+            },
+          },
+          host: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
+
+      // Cancel all tickets for this event (only VALID tickets)
+      const cancelledTickets = await tx.ticket.updateMany({
+        where: {
+          eventId: eventId,
+          status: TicketStatus.VALID, // Only cancel valid tickets
+        },
+        data: {
+          status: TicketStatus.CANCELLED,
+        },
+      });
+
+      // Free all seats that were booked for this event
+      // Get all tickets with seats for this event
+      const ticketsWithSeats = await tx.ticket.findMany({
+        where: {
+          eventId: eventId,
+          seatId: { not: null },
+        },
+        select: {
+          seatId: true,
+        },
+      });
+
+      // Get unique seat IDs
+      const seatIds = [
+        ...new Set(
+          ticketsWithSeats
+            .map((t) => t.seatId)
+            .filter((id): id is number => id !== null),
+        ),
+      ];
+
+      // Free all seats
+      if (seatIds.length > 0) {
+        await tx.seat.updateMany({
+          where: {
+            id: { in: seatIds },
+          },
+          data: {
+            isBooked: false,
+          },
+        });
+      }
+
+      // Remove all staff assignments for this event
+      const removedStaff = await tx.eventStaff.deleteMany({
+        where: {
+          eventId: eventId,
+        },
+      });
+
+      // Remove all speaker assignments for this event
+      const removedSpeakers = await tx.eventSpeaker.deleteMany({
+        where: {
+          eventId: eventId,
+        },
+      });
+
+      // Note: registeredCount is not decremented because we want to keep the record
+      // of how many people registered before cancellation
+
+      // Get organizer owner ID
+      const organizerOwnerId = await tx.event
+        .findUnique({
+          where: { id: eventId },
+          select: {
+            organizer: {
+              select: {
+                ownerId: true,
+              },
+            },
+          },
+        })
+        .then((e) => e?.organizer.ownerId);
+
+      // Send notification to organizer
+      if (organizerOwnerId) {
+        this.notificationService
+          .notifyEventStatusChange(
+            organizerOwnerId,
+            {
+              id: updatedEvent.id,
+              title: updatedEvent.title,
+              status: EventStatus.CANCELED,
+            },
+            EventStatus.CANCELED,
+          )
+          .catch((error) => {
+            console.error(
+              `Failed to send notification to organizer ${organizerOwnerId}:`,
+              error,
+            );
+          });
+      }
+
+      // Send notification to all registered users via OneSignal
+      this.notificationService
+        .notifyEventCancelledToAttendees(eventId, updatedEvent.title)
+        .catch((error) => {
+          console.error(
+            `Failed to send cancellation notification to attendees for event ${eventId}:`,
+            error,
+          );
+        });
+
+      // Send email to all registered users
+      const uniqueUsers = Array.from(
+        new Map(registeredUsers.map((t) => [t.user.id, t.user])).values(),
+      );
+
+      for (const user of uniqueUsers) {
+        this.emailService
+          .sendEventCancellationEmail({
+            email: user.email,
+            fullName:
+              `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Bạn',
+            eventTitle: eventDetails?.title || updatedEvent.title,
+            eventStartTime: eventDetails?.startTime,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to send cancellation email to user ${user.id} (${user.email}):`,
+              error,
+            );
+          });
+      }
+
+      // Send notification to organizer about cancellation approval
+      if (organizerOwnerId) {
+        this.notificationService
+          .notifyCancellationRequestApproved({
+            organizerOwnerId,
+            eventId: eventId,
+            eventTitle: updatedEvent.title,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to send approval notification to organizer ${organizerOwnerId}:`,
+              error,
+            );
+          });
+
+        // Get organizer owner email
+        const organizerOwner = await tx.user.findUnique({
+          where: { id: organizerOwnerId },
+          select: { email: true, firstName: true, lastName: true },
+        });
+
+        if (organizerOwner) {
+          this.emailService
+            .sendCancellationRequestApprovedEmail({
+              email: organizerOwner.email,
+              fullName:
+                `${organizerOwner.firstName || ''} ${organizerOwner.lastName || ''}`.trim() ||
+                'Bạn',
+              eventTitle: updatedEvent.title,
+              reason: reason,
+            })
+            .catch((error) => {
+              console.error(
+                `Failed to send approval email to organizer ${organizerOwnerId}:`,
+                error,
+              );
+            });
+        }
+      }
+
+      return {
+        ...updatedEvent,
+        message: 'Sự kiện đã được hủy thành công',
+        cancelledTicketsCount: cancelledTickets.count,
+        freedSeatsCount: seatIds.length,
+        removedStaffCount: removedStaff.count,
+        removedSpeakersCount: removedSpeakers.count,
+      };
+    });
+  }
+
+  /**
+   * Admin có thể hủy sự kiện trực tiếp (không cần approval)
+   */
+  async cancelEventByAdmin(
+    id: string,
+    currentUser: { userId: number; roleName: string },
+  ) {
+    if (currentUser.roleName !== 'admin') {
+      throw new ForbiddenException(
+        'Chỉ admin mới có quyền hủy sự kiện trực tiếp.',
+      );
+    }
+
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
+    }
+
+    // Only allow canceling PUBLISHED events
+    if (event.status !== EventStatus.PUBLISHED) {
+      throw new BadRequestException(
+        `Không thể hủy sự kiện này. Chỉ có thể hủy sự kiện đã được PUBLISHED. Trạng thái hiện tại: ${event.status}`,
+      );
+    }
+
+    return await this.processCancellation(id, 'Admin đã hủy sự kiện trực tiếp');
+  }
+
+  /**
+   * Admin lấy danh sách các yêu cầu hủy sự kiện
+   */
+  async getCancellationRequests(query: QueryCancellationRequestsDto) {
+    const { page = 1, limit = 10, status, eventId, requestedBy } = query;
+
+    const where: Prisma.EventCancellationRequestWhereInput = {};
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (eventId) {
+      where.eventId = eventId;
+    }
+
+    if (requestedBy) {
+      where.requestedBy = requestedBy;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.eventCancellationRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          event: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              startTime: true,
+              endTime: true,
+              organizer: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          requester: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          reviewer: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.eventCancellationRequest.count({ where }),
+    ]);
+
+    return {
+      data: items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findAssignedEvents(staffId: number, query: QueryEventDto) {
@@ -1907,6 +2540,18 @@ export class EventService {
             ownerId: true,
           },
         },
+        venue: {
+          select: {
+            id: true,
+            campusId: true,
+            campus: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -1934,6 +2579,14 @@ export class EventService {
     // Check if user exists
     const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
+      include: {
+        campus: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -1950,6 +2603,31 @@ export class EventService {
     if (user.roleName !== 'staff') {
       throw new BadRequestException(
         `User với ID ${dto.userId} không phải là staff. Chỉ staff mới có thể được phân công cho sự kiện.`,
+      );
+    }
+
+    // Validate campus: staff phải cùng campus với event venue
+    if (!event.venue) {
+      throw new BadRequestException(
+        'Sự kiện chưa có địa điểm (venue). Vui lòng chọn địa điểm trước khi phân công staff.',
+      );
+    }
+
+    if (!event.venue.campusId) {
+      throw new BadRequestException(
+        'Địa điểm của sự kiện chưa có campus. Không thể phân công staff.',
+      );
+    }
+
+    if (!user.campusId) {
+      throw new BadRequestException(
+        `Staff với ID ${dto.userId} chưa được gán vào campus. Không thể phân công cho sự kiện.`,
+      );
+    }
+
+    if (event.venue.campusId !== user.campusId) {
+      throw new BadRequestException(
+        `Staff phải thuộc cùng campus với địa điểm của sự kiện. Sự kiện thuộc campus "${event.venue.campus?.name || event.venue.campusId}", nhưng staff thuộc campus "${user.campus?.name || user.campusId}".`,
       );
     }
 
@@ -2042,6 +2720,12 @@ export class EventService {
                   name: true,
                 },
               },
+              venue: {
+                select: {
+                  name: true,
+                  location: true,
+                },
+              },
             },
           },
         },
@@ -2063,6 +2747,24 @@ export class EventService {
             `Failed to send notification to staff ${dto.userId}:`,
             error,
           );
+        });
+
+      // Gửi email thông báo cho staff khi được assign vào event
+      this.emailService
+        .sendStaffAssignedEmail({
+          email: eventStaff.user.email,
+          fullName:
+            `${eventStaff.user.firstName} ${eventStaff.user.lastName}`.trim() ||
+            eventStaff.user.userName,
+          eventTitle: eventStaff.event.title,
+          eventStartTime: eventStaff.event.startTime,
+          eventEndTime: eventStaff.event.endTime,
+          organizerName: eventStaff.event.organizer?.name,
+          venueName: eventStaff.event.venue?.name,
+          venueLocation: eventStaff.event.venue?.location,
+        })
+        .catch((error) => {
+          console.error(`Failed to send email to staff ${dto.userId}:`, error);
         });
 
       return eventStaff;
@@ -2497,6 +3199,118 @@ export class EventService {
     } catch (error) {
       // Log lỗi nhưng không throw để không ảnh hưởng đến flow chính
       console.error('Error updating multiple event statuses:', error);
+    }
+  }
+
+  /**
+   * Event organizer xóa sự kiện khỏi DB (chỉ cho phép khi status = PENDING)
+   * Nếu status = PUBLISHED hoặc các status khác, phải dùng cancellation request
+   */
+  async delete(id: string, currentUser?: { id?: number; roleName?: string }) {
+    // Check if event exists
+    const event = await this.prisma.event.findUnique({
+      where: { id },
+      include: {
+        organizer: {
+          select: {
+            id: true,
+            ownerId: true,
+          },
+        },
+      },
+    });
+
+    if (!event) {
+      throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
+    }
+
+    // Check permission: only organizer owner can delete
+    if (currentUser?.roleName === 'event_organizer' && currentUser.id) {
+      if (!event.organizer.ownerId) {
+        throw new ForbiddenException(
+          'Organizer này không có chủ sở hữu. Bạn không thể xóa sự kiện của organizer này.',
+        );
+      }
+
+      if (event.organizer.ownerId !== currentUser.id) {
+        throw new ForbiddenException(
+          'Bạn không có quyền xóa sự kiện này. Bạn không phải là chủ sở hữu của organizer này.',
+        );
+      }
+    }
+
+    // Only allow deleting PENDING events
+    if (event.status !== EventStatus.PENDING) {
+      throw new BadRequestException(
+        `Không thể xóa sự kiện này. Chỉ có thể xóa sự kiện có trạng thái PENDING. Trạng thái hiện tại: ${event.status}. Đối với sự kiện đã PUBLISHED, vui lòng sử dụng API yêu cầu hủy sự kiện.`,
+      );
+    }
+
+    try {
+      // Delete related records manually before deleting event (transaction)
+      await this.prisma.$transaction(async (tx) => {
+        // Delete event speakers
+        await tx.eventSpeaker.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete event staffs
+        await tx.eventStaff.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete tickets (if any - though PENDING events shouldn't have tickets)
+        await tx.ticket.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete feedbacks (if any)
+        await tx.feedback.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete incidents (if any)
+        await tx.incident.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete event notification logs
+        await tx.eventNotificationLog.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete cancellation requests (if any)
+        await tx.eventCancellationRequest.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Delete event summary (if any)
+        await tx.eventSummary.deleteMany({
+          where: { eventId: id },
+        });
+
+        // Finally delete the event
+        await tx.event.delete({
+          where: { id },
+        });
+      });
+
+      return {
+        message: 'Sự kiện đã được xóa thành công',
+        eventId: id,
+        title: event.title,
+      };
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code: string }).code === 'P2025'
+      ) {
+        throw new NotFoundException(`Không tìm thấy sự kiện với ID ${id}`);
+      }
+
+      throw error;
     }
   }
 }

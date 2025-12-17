@@ -4,4 +4,7 @@ export * from './update-event-status.dto';
 export * from './query-event.dto';
 export * from './assign-staff.dto';
 export * from './query-event-stats.dto';
+export * from './request-cancellation.dto';
+export * from './approve-cancellation.dto';
+export * from './query-cancellation-requests.dto';
 

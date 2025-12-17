@@ -37,6 +37,7 @@ export class UserService {
         phoneNumber: true,
         gender: true,
         address: true,
+        studentCode: true,
         roleName: true,
         isActive: true,
         createdAt: true,
@@ -79,9 +80,8 @@ export class UserService {
     try {
       const passwordHash = await argon2.hash(password);
 
-      // Admin accounts are automatically APPROVED, others are PENDING
-      const status =
-        roleName === UserRole.admin ? UserStatus.APPROVED : UserStatus.PENDING;
+      // Tài khoản tạo qua API này luôn được APPROVED (admin/organizer tạo cho staff)
+      const status = UserStatus.APPROVED;
 
       const user = await this.prisma.user.create({
         data: {
@@ -97,9 +97,28 @@ export class UserService {
           gender,
           address,
           avatar,
-          status, // Set status based on role
+          status,
+          isActive: true, // APPROVED users luôn active
         },
       });
+
+      // Gửi email thông tin tài khoản cho mọi user khi được tạo bởi admin/organizer
+      if (password) {
+        this.emailService
+          .sendAccountCreatedEmail({
+            email: user.email,
+            password: password, // Gửi password gốc trước khi hash
+            roleName: roleName,
+            fullName:
+              `${user.firstName} ${user.lastName}`.trim() || user.userName,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to send account email to ${user.email}:`,
+              error,
+            );
+          });
+      }
 
       return this.excludePassword(user);
     } catch (error: unknown) {
@@ -171,6 +190,7 @@ export class UserService {
           roleName: true,
           status: true,
           isActive: true,
+          studentCardImage: true,
           createdAt: true,
           campus: {
             select: {
@@ -213,6 +233,7 @@ export class UserService {
         firstName: true,
         lastName: true,
         avatar: true,
+        studentCardImage: true,
         phoneNumber: true,
         gender: true,
         address: true,
@@ -243,6 +264,12 @@ export class UserService {
     if (dto.password) {
       data.passwordHash = await argon2.hash(dto.password);
       delete data.password;
+    }
+
+    // Đảm bảo nếu status = PENDING thì isActive = false
+    // (status có thể được truyền vào data object nếu cần)
+    if (data.status === UserStatus.PENDING) {
+      data.isActive = false;
     }
 
     try {
@@ -434,8 +461,13 @@ export class UserService {
         where: { id },
         data: {
           status: dto.status,
-          // Nếu approve, kích hoạt tài khoản
-          isActive: dto.status === UserStatus.APPROVED ? true : user.isActive,
+          // Nếu approve, kích hoạt tài khoản; nếu pending, deactivate
+          isActive:
+            dto.status === UserStatus.APPROVED
+              ? true
+              : dto.status === UserStatus.PENDING
+                ? false
+                : user.isActive,
         },
       });
 

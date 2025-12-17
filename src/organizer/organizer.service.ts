@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrganizerDto, UpdateOrganizerDto } from './dto';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class OrganizerService {
@@ -14,6 +15,10 @@ export class OrganizerService {
     // Validate that owner_id exists
     const owner = await this.prisma.user.findUnique({
       where: { id: dto.ownerId },
+      select: {
+        id: true,
+        campusId: true,
+      },
     });
 
     if (!owner) {
@@ -27,6 +32,13 @@ export class OrganizerService {
 
     if (!campus) {
       throw new NotFoundException(`Campus with ID ${dto.campusId} not found`);
+    }
+
+    // Ensure owner belongs to the same campus as organizer
+    if (owner.campusId !== dto.campusId) {
+      throw new BadRequestException(
+        'Owner của organizer phải thuộc cùng campus được chọn',
+      );
     }
 
     try {
@@ -103,6 +115,36 @@ export class OrganizerService {
     return organizers;
   }
 
+  async findAllForRole(userId: number, role: UserRole) {
+    if (role === UserRole.event_organizer) {
+      return this.prisma.organizer.findMany({
+        where: { ownerId: userId },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              userName: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          campus: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              address: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+    // admin/staff xem tất cả
+    return this.findAll();
+  }
+
   async findOne(id: number) {
     const organizer = await this.prisma.organizer.findUnique({
       where: { id },
@@ -128,6 +170,41 @@ export class OrganizerService {
     });
 
     if (!organizer) {
+      throw new NotFoundException(`Không tìm thấy organizer với ID ${id}`);
+    }
+
+    return organizer;
+  }
+
+  async findOneForRole(id: number, userId: number, role: UserRole) {
+    const organizer = await this.prisma.organizer.findUnique({
+      where: { id },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            userName: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        campus: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            address: true,
+          },
+        },
+      },
+    });
+
+    if (!organizer) {
+      throw new NotFoundException(`Không tìm thấy organizer với ID ${id}`);
+    }
+
+    if (role === UserRole.event_organizer && organizer.ownerId !== userId) {
       throw new NotFoundException(`Không tìm thấy organizer với ID ${id}`);
     }
 

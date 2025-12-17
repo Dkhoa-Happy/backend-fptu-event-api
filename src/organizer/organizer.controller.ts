@@ -21,6 +21,7 @@ import { CreateOrganizerDto, UpdateOrganizerDto } from './dto';
 import { JwtGuard, RolesGuard } from '../auth/guard';
 import { Roles } from '../auth/decorator';
 import { UserRole } from '@prisma/client';
+import { GetUser } from '../auth/decorator';
 
 @ApiTags('organizers')
 @ApiBearerAuth()
@@ -67,8 +68,8 @@ export class OrganizerController {
   @ApiForbiddenResponse({
     description: 'Forbidden. Required roles: admin, staff, event_organizer',
   })
-  async findAll() {
-    return this.organizerService.findAll();
+  async findAll(@GetUser('id') userId: number, @GetUser('roleName') role: UserRole) {
+    return this.organizerService.findAllForRole(userId, role);
   }
 
   @Get(':id')
@@ -87,8 +88,12 @@ export class OrganizerController {
   @ApiForbiddenResponse({
     description: 'Forbidden. Required roles: admin, staff, event_organizer',
   })
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.organizerService.findOne(id);
+  async findOne(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('id') userId: number,
+    @GetUser('roleName') role: UserRole,
+  ) {
+    return this.organizerService.findOneForRole(id, userId, role);
   }
 
   @Put(':id')

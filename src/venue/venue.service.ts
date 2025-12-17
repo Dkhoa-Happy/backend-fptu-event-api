@@ -31,6 +31,7 @@ export class VenueService {
         row: true,
         column: true,
         hasSeats: true,
+        capacity: true,
         mapImageUrl: true,
         status: true,
         campusId: true,
@@ -49,7 +50,10 @@ export class VenueService {
           id: true,
           name: true,
           location: true,
+          row: true,
+          column: true,
           hasSeats: true,
+          capacity: true,
           mapImageUrl: true,
           status: true,
           campusId: true,
@@ -81,8 +85,16 @@ export class VenueService {
   }
 
   async createVenue(venue: CreateVenueDto) {
-    const { name, location, row, column, hasSeats, mapImageUrl, campusId } =
-      venue;
+    const {
+      name,
+      location,
+      row,
+      column,
+      hasSeats,
+      capacity,
+      mapImageUrl,
+      campusId,
+    } = venue;
     try {
       // Check if campus exists
       const campus = await this.prisma.campus.findUnique({
@@ -103,6 +115,16 @@ export class VenueService {
         );
       }
 
+      // Validate số ghế (row * column) không vượt quá capacity
+      if (hasSeats && capacity > 0) {
+        const totalSeats = row * column;
+        if (totalSeats > capacity) {
+          throw new BadRequestException(
+            `Số ghế (${row} hàng × ${column} cột = ${totalSeats} ghế) không được vượt quá sức chứa tối đa (${capacity} người)`,
+          );
+        }
+      }
+
       const response = await this.prisma.venue.create({
         data: {
           name,
@@ -110,6 +132,7 @@ export class VenueService {
           row: finalRow,
           column: finalColumn,
           hasSeats,
+          capacity,
           mapImageUrl,
           campusId,
           status: 'ACTIVE',
@@ -164,7 +187,7 @@ export class VenueService {
   }
 
   async updateVenue(id: number, venue: UpdateVenueDto) {
-    const { name, location, mapImageUrl } = venue;
+    const { name, location, mapImageUrl, capacity } = venue;
     try {
       const existingVenue = await this.prisma.venue.findUnique({
         where: { id },
@@ -173,13 +196,25 @@ export class VenueService {
         throw new BadRequestException('Venue không tồn tại');
       }
 
+      // Validate capacity nếu có thay đổi và venue có ghế
+      if (capacity !== undefined && existingVenue.hasSeats) {
+        const totalSeats = existingVenue.row * existingVenue.column;
+        if (totalSeats > capacity) {
+          throw new BadRequestException(
+            `Số ghế hiện tại (${existingVenue.row} hàng × ${existingVenue.column} cột = ${totalSeats} ghế) không được vượt quá sức chứa tối đa mới (${capacity} người)`,
+          );
+        }
+      }
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (location !== undefined) updateData.location = location;
+      if (mapImageUrl !== undefined) updateData.mapImageUrl = mapImageUrl;
+      if (capacity !== undefined) updateData.capacity = capacity;
+
       const response = await this.prisma.venue.update({
         where: { id },
-        data: {
-          name,
-          location,
-          mapImageUrl,
-        },
+        data: updateData,
       });
       return { message: 'Cập nhật venue thành công', venue: response };
     } catch (error: unknown) {
@@ -233,9 +268,8 @@ export class VenueService {
       });
 
       if (activeEvents.length > 0) {
-        const eventTitles = activeEvents.map((e) => `"${e.title}"`).join(', ');
         throw new BadRequestException(
-          `Không thể xóa venue này vì có ${activeEvents.length} sự kiện đang sử dụng venue này: ${eventTitles}. Vui lòng hủy hoặc hoàn thành các sự kiện trước khi xóa venue.`,
+          `Không thể vô hiệu hóa venue. Có ${activeEvents.length} sự kiện đang sử dụng venue này.`,
         );
       }
 

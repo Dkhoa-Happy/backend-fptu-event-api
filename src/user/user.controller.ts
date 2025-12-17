@@ -57,12 +57,13 @@ export class UserController {
   }
 
   @Post()
-  @Roles(UserRole.admin)
+  @Roles(UserRole.admin, UserRole.event_organizer)
   @ApiOperation({
-    summary: 'Create a new user (for admin management) - Required roles: admin',
+    summary:
+      'Create a new user (for admin management) - Required roles: admin, event_organizer',
   })
   @ApiForbiddenResponse({
-    description: 'Forbidden. Required roles: admin',
+    description: 'Forbidden. Required roles: admin, event_organizer',
   })
   @ApiResponse({ status: 201, description: 'User created successfully' })
   async createUser(@Body() dto: CreateUserDto) {

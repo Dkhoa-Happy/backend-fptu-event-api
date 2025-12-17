@@ -26,6 +26,9 @@ import {
   QueryEventDto,
   AssignStaffDto,
   QueryEventStatsDto,
+  RequestCancellationDto,
+  ApproveCancellationDto,
+  QueryCancellationRequestsDto,
 } from './dto';
 import { JwtGuard, RolesGuard } from '../auth/guard';
 import { GetUser, Roles } from '../auth/decorator';
@@ -143,6 +146,58 @@ export class EventController {
   })
   async getEventStatsByMonth(@Query() query: QueryEventStatsDto) {
     return this.eventService.getEventStatsByMonth(query);
+  }
+
+  @Get('cancellation-requests')
+  @Roles(UserRole.admin)
+  @ApiOperation({
+    summary: 'Get cancellation requests - Required roles: admin',
+    description:
+      'Admin can get a list of all cancellation requests from organizers. Supports pagination and filtering by status, eventId, and requestedBy.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of cancellation requests retrieved successfully',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: admin.',
+  })
+  async getCancellationRequests(@Query() query: QueryCancellationRequestsDto) {
+    return this.eventService.getCancellationRequests(query);
+  }
+
+  @Patch('cancellation-requests/:requestId/status')
+  @Roles(UserRole.admin)
+  @ApiOperation({
+    summary: 'Approve or reject cancellation request - Required roles: admin',
+    description:
+      'Admin can approve or reject a cancellation request from organizer. When approved, the event will be cancelled and notifications will be sent.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cancellation request processed successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Cancellation request not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Bad request (e.g., request already processed, invalid status)',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden. Required roles: admin.',
+  })
+  async approveCancellationRequest(
+    @Param('requestId', ParseIntPipe) requestId: number,
+    @Body() dto: ApproveCancellationDto,
+    @GetUser() user: any,
+  ) {
+    return this.eventService.approveCancellationRequest(requestId, dto, {
+      userId: user.id,
+      roleName: user.roleName,
+    });
   }
 
   @Post(':eventId/staff')
@@ -307,11 +362,47 @@ export class EventController {
   }
 
   @Post(':id/cancel')
-  @Roles(UserRole.admin, UserRole.event_organizer)
+  @Roles(UserRole.event_organizer)
   @ApiOperation({
-    summary: 'Cancel published event - Required roles: admin, event_organizer',
+    summary:
+      'Request to cancel published event - Required roles: event_organizer',
     description:
-      'Cancel a published event when there are issues or need to reschedule. Admin can cancel any event. Event organizer can only cancel events from their own organizers. When event is cancelled, all tickets will be marked as CANCELLED.',
+      'Organizer can request to cancel a published event with a reason. The request will be sent to admin for approval. Only organizer owner can request cancellation.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cancellation request created successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Event not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Bad request (e.g., event is already cancelled/completed, pending request exists)',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Forbidden. Required roles: event_organizer. Or you do not own this event organizer.',
+  })
+  async cancelEvent(
+    @Param('id') id: string,
+    @Body() dto: RequestCancellationDto,
+    @GetUser() user: any,
+  ) {
+    return this.eventService.cancelEvent(id, dto, {
+      userId: user.id,
+      roleName: user.roleName,
+    });
+  }
+
+  @Post(':id/cancel/admin')
+  @Roles(UserRole.admin)
+  @ApiOperation({
+    summary: 'Cancel event directly (admin only) - Required roles: admin',
+    description:
+      'Admin can cancel a published event directly without approval. When event is cancelled, all tickets will be marked as CANCELLED.',
   })
   @ApiResponse({
     status: 200,
@@ -327,13 +418,41 @@ export class EventController {
       'Bad request (e.g., event is already cancelled/completed, cannot cancel)',
   })
   @ApiForbiddenResponse({
-    description:
-      'Forbidden. Required roles: admin, event_organizer. Or you do not own this event organizer.',
+    description: 'Forbidden. Required roles: admin.',
   })
-  async cancelEvent(@Param('id') id: string, @GetUser() user: any) {
-    return this.eventService.cancelEvent(id, {
+  async cancelEventByAdmin(@Param('id') id: string, @GetUser() user: any) {
+    return this.eventService.cancelEventByAdmin(id, {
       userId: user.id,
       roleName: user.roleName,
     });
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.event_organizer)
+  @ApiOperation({
+    summary:
+      'Delete event (organizer only, PENDING status only) - Required roles: event_organizer',
+    description:
+      'Event organizer can delete their own events that are still PENDING. Once event is PUBLISHED, must use cancellation request API instead. Only organizer owner can delete their events.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Event deleted successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Event not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Bad request (e.g., event is not PENDING, cannot delete published events)',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Forbidden. Required roles: event_organizer. Or you do not own this event organizer.',
+  })
+  async delete(@Param('id') id: string, @GetUser() user: any) {
+    return this.eventService.delete(id, user);
   }
 }

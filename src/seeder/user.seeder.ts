@@ -112,7 +112,7 @@ export class UserSeeder implements Seeder {
         userName: 'student1',
         firstName: 'Student',
         lastName: 'Account',
-        studentCode: 'SE182689',
+        studentCode: 'SE182634',
         phoneNumber: '0900000003',
         gender: false, // female
       },
