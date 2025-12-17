@@ -184,36 +184,36 @@ model OrganizerRequest {
 }
 
 model Event {
-  id                String      @id @default(uuid())
-  title             String
-  description       String?
-  category          String?
-  bannerUrl         String?     @map("banner_url")
+  id                 String         @id @default(uuid())
+  title              String
+  description        String?
+  category           String?
+  bannerUrl          String?        @map("banner_url")
   /// Thời gian bắt đầu/kết thúc đăng ký. Null nếu sự kiện là online (isOnline = true)
-  startTimeRegister DateTime?   @map("start_time_register")
-  endTimeRegister   DateTime?   @map("end_time_register")
-  startTime         DateTime    @map("start_time")
-  endTime           DateTime    @map("end_time")
-  status            EventStatus @default(PENDING)
+  startTimeRegister  DateTime?      @map("start_time_register")
+  endTimeRegister    DateTime?      @map("end_time_register")
+  startTime          DateTime       @map("start_time")
+  endTime            DateTime       @map("end_time")
+  status             EventStatus    @default(PENDING)
   /// Sức chứa tối đa. Null nếu sự kiện là online (isOnline = true)
-  maxCapacity       Int?        @map("max_capacity")
-  registeredCount   Int         @default(0) @map("registered_count")
+  maxCapacity        Int?           @map("max_capacity")
+  registeredCount    Int            @default(0) @map("registered_count")
   /// Sự kiện online (true) hay offline (false - tại venue)
-  isOnline          Boolean     @default(false) @map("is_online")
+  isOnline           Boolean        @default(false) @map("is_online")
   /// Link Google Meet / Zoom / Teams cho sự kiện online
-  onlineMeetingUrl  String?     @map("online_meeting_url")
+  onlineMeetingUrl   String?        @map("online_meeting_url")
   /// Thông tin lặp lại sự kiện
-  recurrenceType    RecurrenceType @default(NONE) @map("recurrence_type")
+  recurrenceType     RecurrenceType @default(NONE) @map("recurrence_type")
   /// Khoảng lặp (ví dụ: 1 = mỗi tuần/tháng, 2 = 2 tuần 1 lần,...)
-  recurrenceInterval Int?       @map("recurrence_interval")
+  recurrenceInterval Int?           @map("recurrence_interval")
   /// Ngày kết thúc pattern lặp lại
-  recurrenceEndDate DateTime?   @map("recurrence_end_date")
+  recurrenceEndDate  DateTime?      @map("recurrence_end_date")
   /// Số lần lặp tối đa (nếu không dùng recurrenceEndDate)
-  recurrenceCount   Int?        @map("recurrence_count")
+  recurrenceCount    Int?           @map("recurrence_count")
   /// Nếu true: sự kiện public toàn hệ thống (mọi campus đều thấy/join được)
   /// Nếu false: chỉ sinh viên thuộc campus của sự kiện mới thấy (dựa vào campus của venue)
-  isGlobal          Boolean     @default(false) @map("is_global")
-  createdAt         DateTime    @default(now()) @map("created_at")
+  isGlobal           Boolean        @default(false) @map("is_global")
+  createdAt          DateTime       @default(now()) @map("created_at")
 
   // Host và Organizer (Giữ nguyên)
   hostId      Int       @map("host_id")
@@ -246,6 +246,9 @@ model Event {
 
   // Cancellation requests
   cancellationRequests EventCancellationRequest[]
+
+  // SeatType mapping cho từng event
+  eventSeatTypes EventSeatType[]
 
   @@map("events")
 }
@@ -330,7 +333,26 @@ model Seat {
   // Quan hệ mới: Seat có thể được book bởi Ticket
   tickets Ticket[]
 
+  // Quan hệ: Seat có thể có seatType riêng cho từng event
+  eventSeatTypes EventSeatType[]
+
   @@map("seats")
+}
+
+// Mapping seatType theo từng event (mỗi event có thể set seatType khác nhau cho cùng một ghế)
+model EventSeatType {
+  id       Int    @id @default(autoincrement())
+  seatType String @map("seat_type")
+
+  eventId String @map("event_id")
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  seatId Int  @map("seat_id")
+  seat   Seat @relation(fields: [seatId], references: [id], onDelete: Cascade)
+
+  // Đảm bảo mỗi (event, seat) chỉ có 1 seatType
+  @@unique([eventId, seatId])
+  @@map("event_seat_types")
 }
 
 model Campus {

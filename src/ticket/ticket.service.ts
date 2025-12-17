@@ -189,6 +189,27 @@ export class TicketService {
       );
     }
 
+    // Check seatType cho event hiện tại (dùng EventSeatType mapping)
+    const eventSeatType = await this.prisma.eventSeatType.findUnique({
+      where: {
+        eventId_seatId: {
+          eventId: dto.eventId,
+          seatId: dto.seatId,
+        },
+      },
+    });
+
+    // Nếu seatType là VIP cho event này thì không cho tự đăng ký vé
+    if (
+      eventSeatType &&
+      typeof eventSeatType.seatType === 'string' &&
+      eventSeatType.seatType.toLowerCase() === 'vip'
+    ) {
+      throw new BadRequestException(
+        'Ghế VIP chỉ dành cho khách mời/ban tổ chức. Vui lòng chọn ghế khác.',
+      );
+    }
+
     // Check if seat is already booked for this event (only check VALID/USED tickets)
     // CANCELLED/EXPIRED tickets will be handled in transaction to allow re-booking
     const existingSeatBooking = await this.prisma.ticket.findFirst({

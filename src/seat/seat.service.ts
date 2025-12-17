@@ -46,7 +46,7 @@ export class SeatService {
         orderBy: [{ rowLabel: 'asc' }, { colLabel: 'asc' }],
       });
 
-      // Nếu có eventId, tính toán isBooked động dựa trên Ticket của event đó
+      // Nếu có eventId, tính toán isBooked và seatType động dựa trên Ticket và EventSeatType của event đó
       if (eventId) {
         // Lấy tất cả ticket đã book ghế cho event này (chỉ VALID và USED, không tính CANCELLED và EXPIRED)
         const bookedTickets = await this.prisma.ticket.findMany({
@@ -66,14 +66,34 @@ export class SeatService {
           bookedTickets.map((t) => t.seatId).filter((id): id is number => id !== null),
         );
 
-        // Map lại seats với isBooked được tính động
+        // Lấy seatType từ EventSeatType cho event này
+        const eventSeatTypes = await this.prisma.eventSeatType.findMany({
+          where: {
+            eventId: eventId,
+          },
+          select: {
+            seatId: true,
+            seatType: true,
+          },
+        });
+
+        // Tạo map seatId -> seatType cho event này
+        const seatTypeMap = new Map(
+          eventSeatTypes.map((est) => [est.seatId, est.seatType]),
+        );
+
+        // Map lại seats với isBooked và seatType được tính động
+        // seatType và isBooked là hai trường riêng biệt, không liên quan đến nhau
         return seats.map((seat) => ({
           ...seat,
           isBooked: bookedSeatIds.has(seat.id),
+          // seatType lấy từ EventSeatType nếu có, nếu không thì null (vì mỗi event có seatType riêng)
+          seatType: seatTypeMap.get(seat.id) ?? null,
         }));
       }
 
       // Nếu không có eventId, trả về isBooked từ database (cho admin view)
+      // seatType luôn hiển thị khi không có eventId
       return seats;
     } catch (error: unknown) {
       if (error instanceof BadRequestException) {
@@ -119,6 +139,9 @@ export class SeatService {
 
   async updateSeatType(id: number, dto: UpdateSeatTypeDto) {
     try {
+      const { seatType, eventId } = dto;
+
+      // Validate seat tồn tại
       const seat = await this.prisma.seat.findUnique({
         where: { id },
       });
@@ -127,16 +150,44 @@ export class SeatService {
         throw new BadRequestException('Ghế không tồn tại');
       }
 
-      const updatedSeat = await this.prisma.seat.update({
-        where: { id },
-        data: {
-          seatType: dto.seatType,
+      // Validate event tồn tại
+      const event = await this.prisma.event.findUnique({
+        where: { id: eventId },
+        select: { id: true, venueId: true },
+      });
+
+      if (!event) {
+        throw new BadRequestException(`Event với ID ${eventId} không tồn tại`);
+      }
+
+      // Validate event thuộc venue của seat
+      if (event.venueId !== seat.venueId) {
+        throw new BadRequestException(
+          `Event không thuộc venue của ghế này. Event thuộc venue ID ${event.venueId}, nhưng ghế thuộc venue ID ${seat.venueId}`,
+        );
+      }
+
+      // Upsert EventSeatType (tạo mới hoặc cập nhật nếu đã tồn tại)
+      const eventSeatType = await this.prisma.eventSeatType.upsert({
+        where: {
+          eventId_seatId: {
+            eventId: eventId,
+            seatId: id,
+          },
+        },
+        update: {
+          seatType: seatType,
+        },
+        create: {
+          eventId: eventId,
+          seatId: id,
+          seatType: seatType,
         },
       });
 
       return {
-        message: 'Cập nhật loại ghế thành công',
-        seat: updatedSeat,
+        message: 'Cập nhật loại ghế cho event thành công',
+        eventSeatType: eventSeatType,
       };
     } catch (error: unknown) {
       if (error instanceof BadRequestException) {

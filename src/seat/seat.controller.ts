@@ -42,7 +42,11 @@ export class SeatController {
   @Patch(':id/type')
   @Roles(UserRole.event_organizer)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Cập nhật loại ghế (organizer only)' })
+  @ApiOperation({
+    summary: 'Cập nhật loại ghế cho event cụ thể (organizer only)',
+    description:
+      'Set seatType cho ghế trong event cụ thể. Mỗi event có thể có seatType khác nhau cho cùng một ghế.',
+  })
   updateSeatType(@Param('id') id: string, @Body() dto: UpdateSeatTypeDto) {
     return this.seatService.updateSeatType(parseInt(id), dto);
   }

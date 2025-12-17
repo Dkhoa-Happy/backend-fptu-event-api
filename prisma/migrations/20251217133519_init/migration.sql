@@ -182,6 +182,16 @@ CREATE TABLE "seats" (
 );
 
 -- CreateTable
+CREATE TABLE "event_seat_types" (
+    "id" SERIAL NOT NULL,
+    "seat_type" TEXT NOT NULL,
+    "event_id" TEXT NOT NULL,
+    "seat_id" INTEGER NOT NULL,
+
+    CONSTRAINT "event_seat_types_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "campuses" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
@@ -316,6 +326,9 @@ CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 CREATE UNIQUE INDEX "feedbacks_ticket_id_key" ON "feedbacks"("ticket_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "event_seat_types_event_id_seat_id_key" ON "event_seat_types"("event_id", "seat_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "campuses_name_key" ON "campuses"("name");
 
 -- CreateIndex
@@ -419,6 +432,12 @@ ALTER TABLE "venues" ADD CONSTRAINT "venues_campus_id_fkey" FOREIGN KEY ("campus
 
 -- AddForeignKey
 ALTER TABLE "seats" ADD CONSTRAINT "seats_venue_id_fkey" FOREIGN KEY ("venue_id") REFERENCES "venues"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_seat_types" ADD CONSTRAINT "event_seat_types_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "event_seat_types" ADD CONSTRAINT "event_seat_types_seat_id_fkey" FOREIGN KEY ("seat_id") REFERENCES "seats"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "tickets" ADD CONSTRAINT "tickets_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "events"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
