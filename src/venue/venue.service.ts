@@ -85,8 +85,16 @@ export class VenueService {
   }
 
   async createVenue(venue: CreateVenueDto) {
-    const { name, location, row, column, hasSeats, capacity, mapImageUrl, campusId } =
-      venue;
+    const {
+      name,
+      location,
+      row,
+      column,
+      hasSeats,
+      capacity,
+      mapImageUrl,
+      campusId,
+    } = venue;
     try {
       // Check if campus exists
       const campus = await this.prisma.campus.findUnique({
@@ -260,9 +268,8 @@ export class VenueService {
       });
 
       if (activeEvents.length > 0) {
-        const eventTitles = activeEvents.map((e) => `"${e.title}"`).join(', ');
         throw new BadRequestException(
-          `Không thể xóa venue này vì có ${activeEvents.length} sự kiện đang sử dụng venue này: ${eventTitles}. Vui lòng hủy hoặc hoàn thành các sự kiện trước khi xóa venue.`,
+          `Không thể vô hiệu hóa venue. Có ${activeEvents.length} sự kiện đang sử dụng venue này.`,
         );
       }
 

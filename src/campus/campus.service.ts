@@ -138,32 +138,6 @@ export class CampusService {
     }
   }
 
-  async deleteCampusById(id: number) {
-    try {
-      const existingCampus = await this.prisma.campus.findUnique({
-        where: { id },
-      });
-      if (!existingCampus) {
-        throw new BadRequestException('Campus không tồn tại');
-      }
-      const response = await this.prisma.campus.update({
-        where: { id },
-        data: {
-          status: 'Inactive',
-        },
-      });
-      return { message: 'Xóa campus thành công', campus: response };
-    } catch (error: unknown) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      if (error instanceof Error) {
-        throw new BadRequestException(error.message);
-      }
-      throw new BadRequestException('Lỗi khi xóa campus');
-    }
-  }
-
   async getVenuesByCampusId(id: number) {
     try {
       const campus = await this.prisma.campus.findUnique({
@@ -199,7 +173,7 @@ export class CampusService {
     }
   }
 
-  async activateCampus(id: number) {
+  async updateCampusStatus(id: number, status: 'Active' | 'Inactive') {
     try {
       const existingCampus = await this.prisma.campus.findUnique({
         where: { id },
@@ -210,10 +184,14 @@ export class CampusService {
       const response = await this.prisma.campus.update({
         where: { id },
         data: {
-          status: 'Active',
+          status,
         },
       });
-      return { message: 'Kích hoạt campus thành công', campus: response };
+      const message =
+        status === 'Active'
+          ? 'Kích hoạt campus thành công'
+          : 'Vô hiệu hóa campus thành công';
+      return { message, campus: response };
     } catch (error: unknown) {
       if (error instanceof BadRequestException) {
         throw error;
@@ -221,7 +199,7 @@ export class CampusService {
       if (error instanceof Error) {
         throw new BadRequestException(error.message);
       }
-      throw new BadRequestException('Lỗi khi kích hoạt campus');
+      throw new BadRequestException('Lỗi khi cập nhật trạng thái campus');
     }
   }
 }

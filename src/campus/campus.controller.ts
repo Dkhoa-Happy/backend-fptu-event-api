@@ -1,4 +1,4 @@
-import { CreateCampusDto } from './dto/createCampus.dto';
+import { CreateCampusDto, UpdateCampusStatusDto } from './dto';
 import {
   Body,
   Controller,
@@ -6,7 +6,6 @@ import {
   Post,
   Param,
   Patch,
-  Delete,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -72,23 +71,18 @@ export class CampusController {
     return this.campusService.updateCampus(parseInt(id), campus);
   }
 
-  @Delete(':id')
+  @Patch(':id/status')
   @Roles(UserRole.admin)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Xóa campus (set status thành Inactive) (admin only)',
+    summary: 'Cập nhật trạng thái campus (Active/Inactive) (admin only)',
+    description:
+      'Dùng API này để activate (Active) hoặc deactivate (Inactive) campus. Thay thế cho API DELETE và PATCH /activate cũ.',
   })
-  deleteCampusById(@Param('id') id: string) {
-    return this.campusService.deleteCampusById(parseInt(id));
-  }
-
-  @Patch(':id/activate')
-  @Roles(UserRole.admin)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Kích hoạt lại campus (set status thành Active) (admin only)',
-  })
-  activateCampus(@Param('id') id: string) {
-    return this.campusService.activateCampus(parseInt(id));
+  updateCampusStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateCampusStatusDto,
+  ) {
+    return this.campusService.updateCampusStatus(parseInt(id), dto.status);
   }
 }
