@@ -39,6 +39,27 @@ export class EventService {
     const baseStartTime = new Date(dto.startTime);
     const baseEndTime = new Date(dto.endTime);
 
+    // Xác định loại sự kiện (online/offline) sớm để dùng chung
+    const isOnline = dto.isOnline ?? false;
+
+    // Với sự kiện offline, tính offset giữa thời gian đăng ký và thời gian bắt đầu sự kiện
+    // để khi lặp lại sự kiện (occurrences), khoảng cách này vẫn được giữ nguyên.
+    const baseStartTimeRegister =
+      !isOnline && dto.startTimeRegister
+        ? new Date(dto.startTimeRegister)
+        : null;
+    const baseEndTimeRegister =
+      !isOnline && dto.endTimeRegister ? new Date(dto.endTimeRegister) : null;
+
+    const registerStartOffsetMs =
+      baseStartTimeRegister !== null
+        ? baseStartTimeRegister.getTime() - baseStartTime.getTime()
+        : null;
+    const registerEndOffsetMs =
+      baseEndTimeRegister !== null
+        ? baseEndTimeRegister.getTime() - baseStartTime.getTime()
+        : null;
+
     type Occurrence = { startTime: Date; endTime: Date };
 
     const occurrences: Occurrence[] = [
@@ -282,8 +303,6 @@ export class EventService {
     // Validate time relationships
     const startTime = baseStartTime;
     const endTime = baseEndTime;
-    const isOnline = dto.isOnline ?? false;
-
     // Check if startTime is before endTime
     if (startTime >= endTime) {
       throw new BadRequestException(
@@ -306,8 +325,8 @@ export class EventService {
         );
       }
 
-      const startTimeRegister = new Date(dto.startTimeRegister);
-      const endTimeRegister = new Date(dto.endTimeRegister);
+      const startTimeRegister = baseStartTimeRegister!;
+      const endTimeRegister = baseEndTimeRegister!;
 
       // Check if startTimeRegister is before endTimeRegister
       if (startTimeRegister >= endTimeRegister) {
@@ -539,6 +558,23 @@ export class EventService {
         const createdEvents: any[] = [];
 
         for (const occ of occurrences) {
+          // Tính lại thời gian đăng ký cho từng lần lặp của sự kiện offline
+          let occurrenceStartTimeRegister: Date | null = null;
+          let occurrenceEndTimeRegister: Date | null = null;
+
+          if (!isOnline && baseStartTimeRegister && baseEndTimeRegister) {
+            if (registerStartOffsetMs !== null) {
+              occurrenceStartTimeRegister = new Date(
+                occ.startTime.getTime() + registerStartOffsetMs,
+              );
+            }
+            if (registerEndOffsetMs !== null) {
+              occurrenceEndTimeRegister = new Date(
+                occ.startTime.getTime() + registerEndOffsetMs,
+              );
+            }
+          }
+
           const createdEvent = await tx.event.create({
             data: {
               title: dto.title,
@@ -549,14 +585,8 @@ export class EventService {
               endTime: occ.endTime,
               startTimeRegister: isOnline
                 ? null
-                : dto.startTimeRegister
-                  ? new Date(dto.startTimeRegister)
-                  : null,
-              endTimeRegister: isOnline
-                ? null
-                : dto.endTimeRegister
-                  ? new Date(dto.endTimeRegister)
-                  : null,
+                : occurrenceStartTimeRegister,
+              endTimeRegister: isOnline ? null : occurrenceEndTimeRegister,
               status: EventStatus.PENDING,
               maxCapacity: isOnline
                 ? null
