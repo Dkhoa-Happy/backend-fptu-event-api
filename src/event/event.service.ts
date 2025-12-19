@@ -583,9 +583,7 @@ export class EventService {
               bannerUrl: dto.bannerUrl,
               startTime: occ.startTime,
               endTime: occ.endTime,
-              startTimeRegister: isOnline
-                ? null
-                : occurrenceStartTimeRegister,
+              startTimeRegister: isOnline ? null : occurrenceStartTimeRegister,
               endTimeRegister: isOnline ? null : occurrenceEndTimeRegister,
               status: EventStatus.PENDING,
               maxCapacity: isOnline
@@ -1598,6 +1596,309 @@ export class EventService {
               });
           }
         }
+      }
+
+      // Handle staff updates if staffIds is provided
+      if (dto.staffIds !== undefined) {
+        // Get final venue for campus validation (only if venueId exists)
+        let finalVenueForStaff: {
+          id: number;
+          campusId: number;
+          campus: {
+            id: number;
+            name: string;
+          };
+        } | null = null;
+        if (finalVenueId) {
+          finalVenueForStaff = await this.prisma.venue.findUnique({
+            where: { id: finalVenueId },
+            select: {
+              id: true,
+              campusId: true,
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          });
+        }
+
+        // Validate venue exists for staff assignment (only for offline events)
+        if (dto.staffIds.length > 0) {
+          if (!finalVenueForStaff) {
+            throw new BadRequestException(
+              'Sự kiện chưa có địa điểm (venue). Vui lòng chọn địa điểm trước khi phân công staff.',
+            );
+          }
+
+          if (!finalVenueForStaff.campusId) {
+            throw new BadRequestException(
+              'Địa điểm của sự kiện chưa có campus. Không thể phân công staff.',
+            );
+          }
+        }
+
+        // Validate all staff IDs
+        if (dto.staffIds.length > 0) {
+          // Remove duplicates
+          const uniqueStaffIds = Array.from(new Set(dto.staffIds));
+
+          // Validate all users exist and are staff
+          const staffUsers = await this.prisma.user.findMany({
+            where: {
+              id: { in: uniqueStaffIds },
+            },
+            include: {
+              campus: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          });
+
+          if (staffUsers.length !== uniqueStaffIds.length) {
+            const foundIds = staffUsers.map((u) => u.id);
+            const missingIds = uniqueStaffIds.filter(
+              (id) => !foundIds.includes(id),
+            );
+            throw new NotFoundException(
+              `Không tìm thấy user với ID: ${missingIds.join(', ')}`,
+            );
+          }
+
+          // Validate all users are staff
+          const nonStaffUsers = staffUsers.filter(
+            (u) => u.roleName !== 'staff',
+          );
+          if (nonStaffUsers.length > 0) {
+            throw new BadRequestException(
+              `Các user sau không phải là staff: ${nonStaffUsers.map((u) => u.id).join(', ')}. Chỉ staff mới có thể được phân công cho sự kiện.`,
+            );
+          }
+
+          // Validate campus matching (finalVenueForStaff is guaranteed to be non-null here due to check above)
+          if (!finalVenueForStaff) {
+            throw new BadRequestException(
+              'Sự kiện chưa có địa điểm (venue). Vui lòng chọn địa điểm trước khi phân công staff.',
+            );
+          }
+
+          const invalidCampusStaff = staffUsers.filter(
+            (u) => !u.campusId || u.campusId !== finalVenueForStaff.campusId,
+          );
+          if (invalidCampusStaff.length > 0) {
+            throw new BadRequestException(
+              `Các staff sau không thuộc cùng campus với địa điểm của sự kiện: ${invalidCampusStaff.map((u) => u.id).join(', ')}. Sự kiện thuộc campus "${finalVenueForStaff.campus?.name || finalVenueForStaff.campusId}".`,
+            );
+          }
+
+          // Check for time conflicts (excluding current event)
+          const finalStartTimeForConflict = finalStartTime;
+          const finalEndTimeForConflict = finalEndTime;
+
+          for (const staffUser of staffUsers) {
+            const conflictingAssignments =
+              await this.prisma.eventStaff.findMany({
+                where: {
+                  userId: staffUser.id,
+                  eventId: { not: id }, // Exclude current event
+                  event: {
+                    status: {
+                      in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+                    },
+                    // Check if time ranges overlap
+                    OR: [
+                      // New event starts during existing event
+                      {
+                        AND: [
+                          { startTime: { lte: finalStartTimeForConflict } },
+                          { endTime: { gt: finalStartTimeForConflict } },
+                        ],
+                      },
+                      // New event ends during existing event
+                      {
+                        AND: [
+                          { startTime: { lt: finalEndTimeForConflict } },
+                          { endTime: { gte: finalEndTimeForConflict } },
+                        ],
+                      },
+                      // New event completely contains existing event
+                      {
+                        AND: [
+                          { startTime: { gte: finalStartTimeForConflict } },
+                          { endTime: { lte: finalEndTimeForConflict } },
+                        ],
+                      },
+                      // Existing event completely contains new event
+                      {
+                        AND: [
+                          { startTime: { lte: finalStartTimeForConflict } },
+                          { endTime: { gte: finalEndTimeForConflict } },
+                        ],
+                      },
+                    ],
+                  },
+                },
+                include: {
+                  event: {
+                    select: {
+                      id: true,
+                      title: true,
+                      startTime: true,
+                      endTime: true,
+                      status: true,
+                    },
+                  },
+                },
+              });
+
+            if (conflictingAssignments.length > 0) {
+              const conflictingEvent = conflictingAssignments[0].event;
+              throw new BadRequestException(
+                `Staff với ID ${staffUser.id} đã được phân công cho sự kiện "${conflictingEvent.title}" từ ${new Date(conflictingEvent.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingEvent.endTime).toLocaleString('vi-VN')}. Không thể phân công cùng lúc cho nhiều sự kiện trong cùng khoảng thời gian.`,
+              );
+            }
+          }
+
+          // Replace all existing staff assignments with new ones using transaction
+          await this.prisma.$transaction(async (tx) => {
+            // Delete all existing staff assignments for this event
+            await tx.eventStaff.deleteMany({
+              where: { eventId: id },
+            });
+
+            // Create new staff assignments
+            if (uniqueStaffIds.length > 0) {
+              await tx.eventStaff.createMany({
+                data: uniqueStaffIds.map((userId) => ({
+                  eventId: id,
+                  userId: userId,
+                })),
+              });
+            }
+          });
+
+          // Send notifications to newly assigned staff (async, don't wait)
+          if (uniqueStaffIds.length > 0) {
+            const updatedEvent = await this.prisma.event.findUnique({
+              where: { id },
+              include: {
+                organizer: {
+                  select: {
+                    name: true,
+                  },
+                },
+                venue: {
+                  select: {
+                    name: true,
+                    location: true,
+                  },
+                },
+              },
+            });
+
+            if (updatedEvent) {
+              for (const staffUser of staffUsers) {
+                // Send push notification
+                this.notificationService
+                  .notifyStaffAssigned(staffUser.id, {
+                    id: updatedEvent.id,
+                    title: updatedEvent.title,
+                    startTime: updatedEvent.startTime,
+                    endTime: updatedEvent.endTime,
+                    organizer: updatedEvent.organizer,
+                  })
+                  .catch((error) => {
+                    console.error(
+                      `Failed to send notification to staff ${staffUser.id}:`,
+                      error,
+                    );
+                  });
+
+                // Send email notification
+                this.emailService
+                  .sendStaffAssignedEmail({
+                    email: staffUser.email,
+                    fullName:
+                      `${staffUser.firstName} ${staffUser.lastName}`.trim() ||
+                      staffUser.userName,
+                    eventTitle: updatedEvent.title,
+                    eventStartTime: updatedEvent.startTime,
+                    eventEndTime: updatedEvent.endTime,
+                    organizerName: updatedEvent.organizer?.name,
+                    venueName: updatedEvent.venue?.name,
+                    venueLocation: updatedEvent.venue?.location,
+                  })
+                  .catch((error) => {
+                    console.error(
+                      `Failed to send email to staff ${staffUser.id}:`,
+                      error,
+                    );
+                  });
+              }
+            }
+          }
+        } else {
+          // If empty array, remove all staff assignments
+          await this.prisma.eventStaff.deleteMany({
+            where: { eventId: id },
+          });
+        }
+      }
+
+      // Return updated event (with staff if staffIds was provided)
+      if (dto.staffIds !== undefined) {
+        const updatedEventWithStaff = await this.prisma.event.findUnique({
+          where: { id },
+          include: {
+            organizer: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                contactEmail: true,
+                logoUrl: true,
+              },
+            },
+            venue: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
+                hasSeats: true,
+              },
+            },
+            host: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+            eventStaffs: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    userName: true,
+                    email: true,
+                    firstName: true,
+                    lastName: true,
+                    roleName: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        return updatedEventWithStaff;
       }
 
       return event;

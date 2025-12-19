@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsDateString,
   IsInt,
@@ -42,7 +43,9 @@ export class UpdateEventDto {
   })
   @IsOptional()
   @IsDateString()
-  @IsFutureDate({ message: 'Thời gian bắt đầu sự kiện không được là ngày quá khứ' })
+  @IsFutureDate({
+    message: 'Thời gian bắt đầu sự kiện không được là ngày quá khứ',
+  })
   startTime?: string;
 
   @ApiPropertyOptional({
@@ -51,7 +54,9 @@ export class UpdateEventDto {
   })
   @IsOptional()
   @IsDateString()
-  @IsFutureDate({ message: 'Thời gian kết thúc sự kiện không được là ngày quá khứ' })
+  @IsFutureDate({
+    message: 'Thời gian kết thúc sự kiện không được là ngày quá khứ',
+  })
   endTime?: string;
 
   @ApiPropertyOptional({
@@ -60,7 +65,9 @@ export class UpdateEventDto {
   })
   @IsOptional()
   @IsDateString()
-  @IsFutureDate({ message: 'Thời gian bắt đầu đăng ký không được là ngày quá khứ' })
+  @IsFutureDate({
+    message: 'Thời gian bắt đầu đăng ký không được là ngày quá khứ',
+  })
   startTimeRegister?: string;
 
   @ApiPropertyOptional({
@@ -69,7 +76,9 @@ export class UpdateEventDto {
   })
   @IsOptional()
   @IsDateString()
-  @IsFutureDate({ message: 'Thời gian kết thúc đăng ký không được là ngày quá khứ' })
+  @IsFutureDate({
+    message: 'Thời gian kết thúc đăng ký không được là ngày quá khứ',
+  })
   endTimeRegister?: string;
 
   @ApiPropertyOptional({
@@ -108,4 +117,15 @@ export class UpdateEventDto {
   @Type(() => Number)
   @IsInt()
   venueId?: number;
+
+  @ApiPropertyOptional({
+    example: [1, 2, 3],
+    description: 'Array of staff user IDs to assign to the event',
+    type: [Number],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Type(() => Number)
+  staffIds?: number[];
 }
