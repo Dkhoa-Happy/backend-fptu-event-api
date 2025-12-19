@@ -234,6 +234,7 @@ export class UserService {
         lastName: true,
         avatar: true,
         studentCardImage: true,
+        studentCode: true,
         phoneNumber: true,
         gender: true,
         address: true,
