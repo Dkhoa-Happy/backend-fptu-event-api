@@ -1597,6 +1597,7 @@ export class TicketService {
           status: true,
           bookingDate: true,
           checkinTime: true,
+          checkoutTime: true,
           user: {
             select: {
               id: true,
@@ -1637,6 +1638,7 @@ export class TicketService {
       status: t.status,
       bookingDate: t.bookingDate,
       checkinTime: t.checkinTime,
+      checkoutTime: t.checkoutTime,
       fullName:
         `${t.user.firstName ?? ''} ${t.user.lastName ?? ''}`.trim() ||
         t.user.userName,
