@@ -333,7 +333,7 @@ export class OrganizerService {
         (error as { code: string }).code === 'P2003'
       ) {
         throw new BadRequestException(
-          'Không thể xóa organizer vì nó đang được tham chiếu bởi các bản ghi khác (ví dụ: sự kiện)',
+          'Không thể xóa! Đơn vị tổ chức này đang có sự kiện đang hoạt động.',
         );
       }
 
@@ -341,4 +341,3 @@ export class OrganizerService {
     }
   }
 }
-
