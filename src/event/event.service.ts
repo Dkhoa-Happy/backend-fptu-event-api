@@ -1486,6 +1486,7 @@ export class EventService {
       if (dto.organizerId !== undefined)
         updateData.organizerId = dto.organizerId;
       if (dto.venueId !== undefined) updateData.venueId = dto.venueId;
+      if (dto.isGlobal !== undefined) updateData.isGlobal = dto.isGlobal;
 
       const event = await this.prisma.event.update({
         where: { id },
