@@ -15,5 +15,3 @@ export class TestSendDto {
   @IsEnum(['one_day', 'thirty_min'])
   type: 'one_day' | 'thirty_min';
 }
-
-

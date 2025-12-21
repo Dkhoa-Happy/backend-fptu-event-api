@@ -23,7 +23,9 @@ export class SeatService {
         });
 
         if (!event) {
-          throw new BadRequestException(`Event với ID ${eventId} không tồn tại`);
+          throw new BadRequestException(
+            `Event với ID ${eventId} không tồn tại`,
+          );
         }
 
         if (event.venueId !== venueId) {
@@ -63,7 +65,9 @@ export class SeatService {
         });
 
         const bookedSeatIds = new Set(
-          bookedTickets.map((t) => t.seatId).filter((id): id is number => id !== null),
+          bookedTickets
+            .map((t) => t.seatId)
+            .filter((id): id is number => id !== null),
         );
 
         // Lấy seatType từ EventSeatType cho event này

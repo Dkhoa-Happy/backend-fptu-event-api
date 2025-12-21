@@ -1,12 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import {
-  IsBoolean,
-  IsInt,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class QueryNotificationsDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
@@ -40,4 +34,3 @@ export class QueryNotificationsDto {
   @IsString()
   type?: string;
 }
-

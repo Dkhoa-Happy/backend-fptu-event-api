@@ -8,8 +8,10 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { IsFutureDate } from './validators/is-future-date.validator';
+import { CreateEventSpeakerDto } from './create-event.dto';
 
 export class UpdateEventDto {
   @ApiPropertyOptional({ example: 'Tech Conference 2025 Updated' })
@@ -128,4 +130,16 @@ export class UpdateEventDto {
   @IsInt({ each: true })
   @Type(() => Number)
   staffIds?: number[];
+
+  @ApiPropertyOptional({
+    type: [CreateEventSpeakerDto],
+    description:
+      'Danh sách speaker (speakerId + topic) gán cho sự kiện khi cập nhật',
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateEventSpeakerDto)
+  speakers?: CreateEventSpeakerDto[];
 }

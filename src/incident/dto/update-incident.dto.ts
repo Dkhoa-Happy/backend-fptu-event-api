@@ -56,4 +56,3 @@ export class UpdateIncidentDto {
   @IsEnum(IncidentStatus)
   status?: IncidentStatus;
 }
-

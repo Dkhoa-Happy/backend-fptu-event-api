@@ -1902,6 +1902,182 @@ export class EventService {
         return updatedEventWithStaff;
       }
 
+      // Handle speaker updates if speakers is provided
+      if (dto.speakers !== undefined) {
+        // Process speakers data
+        const speakers =
+          dto.speakers && dto.speakers.length > 0
+            ? dto.speakers.map((s) => ({
+                speakerId: Number(s.speakerId),
+                topic: s.topic,
+              }))
+            : [];
+
+        // Validate speakers if provided
+        if (speakers.length > 0) {
+          const speakerIds = Array.from(
+            new Set(speakers.map((s) => s.speakerId)),
+          );
+          const speakerRecords = await this.prisma.speaker.findMany({
+            where: { id: { in: speakerIds } },
+            select: { id: true, name: true },
+          });
+
+          if (speakerRecords.length !== speakerIds.length) {
+            const found = new Set(speakerRecords.map((s) => s.id));
+            const missing = speakerIds.filter((id) => !found.has(id));
+            throw new NotFoundException(
+              `Không tìm thấy speaker với id: ${missing.join(', ')}`,
+            );
+          }
+
+          // Check for speaker time conflicts with existing events (excluding current event)
+          const finalStartTimeForConflict = finalStartTime;
+          const finalEndTimeForConflict = finalEndTime;
+
+          for (const speakerId of speakerIds) {
+            const conflictingAssignment =
+              await this.prisma.eventSpeaker.findFirst({
+                where: {
+                  speakerId: speakerId,
+                  eventId: { not: id }, // Exclude current event
+                  event: {
+                    status: {
+                      in: [EventStatus.PUBLISHED, EventStatus.PENDING],
+                    },
+                    // Check if time ranges overlap
+                    OR: [
+                      // New event starts during existing event
+                      {
+                        AND: [
+                          { startTime: { lte: finalStartTimeForConflict } },
+                          { endTime: { gt: finalStartTimeForConflict } },
+                        ],
+                      },
+                      // New event ends during existing event
+                      {
+                        AND: [
+                          { startTime: { lt: finalEndTimeForConflict } },
+                          { endTime: { gte: finalEndTimeForConflict } },
+                        ],
+                      },
+                      // New event completely contains existing event
+                      {
+                        AND: [
+                          { startTime: { gte: finalStartTimeForConflict } },
+                          { endTime: { lte: finalEndTimeForConflict } },
+                        ],
+                      },
+                      // Existing event completely contains new event
+                      {
+                        AND: [
+                          { startTime: { lte: finalStartTimeForConflict } },
+                          { endTime: { gte: finalEndTimeForConflict } },
+                        ],
+                      },
+                    ],
+                  },
+                },
+                include: {
+                  event: {
+                    select: {
+                      id: true,
+                      title: true,
+                      startTime: true,
+                      endTime: true,
+                    },
+                  },
+                  speaker: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              });
+
+            if (conflictingAssignment) {
+              throw new BadRequestException(
+                `Speaker ${conflictingAssignment.speaker.name} (ID: ${speakerId}) đã được phân công cho sự kiện "${conflictingAssignment.event.title}" từ ${new Date(conflictingAssignment.event.startTime).toLocaleString('vi-VN')} đến ${new Date(conflictingAssignment.event.endTime).toLocaleString('vi-VN')}. Không thể phân công trùng lịch.`,
+              );
+            }
+          }
+
+          // Replace all existing speaker assignments with new ones using transaction
+          await this.prisma.$transaction(async (tx) => {
+            // Delete all existing speaker assignments for this event
+            await tx.eventSpeaker.deleteMany({
+              where: { eventId: id },
+            });
+
+            // Create new speaker assignments
+            if (speakers.length > 0) {
+              await tx.eventSpeaker.createMany({
+                data: speakers.map((s) => ({
+                  eventId: id,
+                  speakerId: s.speakerId,
+                  topic: s.topic,
+                })),
+              });
+            }
+          });
+        } else {
+          // If empty array, remove all speaker assignments
+          await this.prisma.eventSpeaker.deleteMany({
+            where: { eventId: id },
+          });
+        }
+      }
+
+      // Return updated event (with speakers if speakers was provided)
+      if (dto.speakers !== undefined) {
+        const updatedEventWithSpeakers = await this.prisma.event.findUnique({
+          where: { id },
+          include: {
+            organizer: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                contactEmail: true,
+                logoUrl: true,
+              },
+            },
+            venue: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
+                hasSeats: true,
+              },
+            },
+            host: {
+              select: {
+                id: true,
+                userName: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+            eventSpeakers: {
+              include: {
+                speaker: {
+                  select: {
+                    id: true,
+                    name: true,
+                    bio: true,
+                    avatar: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        return updatedEventWithSpeakers;
+      }
+
       return event;
     } catch (error: unknown) {
       if (

@@ -12,4 +12,3 @@ export class UpdateTicketDto {
   @IsEnum(TicketStatus)
   status?: TicketStatus;
 }
-

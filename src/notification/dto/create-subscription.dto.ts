@@ -19,5 +19,3 @@ export class CreateSubscriptionDto {
   @IsOptional()
   deviceId?: string;
 }
-
-

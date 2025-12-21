@@ -32,4 +32,3 @@ export class QueryEventAttendeesDto {
   @IsOptional()
   limit?: number = 10;
 }
-

@@ -1,12 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import {
-  IsEnum,
-  IsInt,
-  IsOptional,
-  IsString,
-  Min,
-} from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { TicketStatus } from '@prisma/client';
 
 export class QueryTicketDto {
@@ -50,4 +44,3 @@ export class QueryTicketDto {
   @IsString()
   eventId?: string;
 }
-

@@ -1,12 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { OrganizerRequestStatus } from '@prisma/client';
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class ReviewOrganizerRequestDto {
   @ApiProperty({
     enum: OrganizerRequestStatus,
     description: 'Chỉ chấp nhận APPROVED hoặc REJECTED',
-    examples: [OrganizerRequestStatus.APPROVED, OrganizerRequestStatus.REJECTED],
+    examples: [
+      OrganizerRequestStatus.APPROVED,
+      OrganizerRequestStatus.REJECTED,
+    ],
   })
   @IsEnum(OrganizerRequestStatus)
   status: OrganizerRequestStatus;
@@ -22,4 +31,3 @@ export class ReviewOrganizerRequestDto {
   @MaxLength(500)
   reason?: string;
 }
-

@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IncidentSeverity } from '@prisma/client';
-import { IsEnum, IsOptional, IsString, IsUUID, IsUrl, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  IsUrl,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateIncidentDto {
   @ApiProperty({
@@ -48,4 +56,3 @@ export class CreateIncidentDto {
   @IsEnum(IncidentSeverity)
   severity?: IncidentSeverity;
 }
-

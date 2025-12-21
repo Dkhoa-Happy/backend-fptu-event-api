@@ -35,5 +35,3 @@ export class QueryMyTicketDto {
   @IsString()
   eventId?: string;
 }
-
-

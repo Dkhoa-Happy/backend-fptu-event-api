@@ -1,5 +1,18 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiOperation,
+  ApiTags,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { SeatService } from './seat.service';
 import { UpdateSeatTypeDto, ToggleSeatStatusDto } from './dto';
 import { Public } from '../auth/decorator';
@@ -20,7 +33,8 @@ export class SeatController {
   @ApiQuery({
     name: 'eventId',
     required: false,
-    description: 'Event ID để check availability (nếu có sẽ tính isBooked theo event đó)',
+    description:
+      'Event ID để check availability (nếu có sẽ tính isBooked theo event đó)',
   })
   getSeatsByVenueId(
     @Param('venueId') venueId: string,

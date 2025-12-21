@@ -1,11 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUrl,
-} from 'class-validator';
+import { IsEmail, IsInt, IsOptional, IsString, IsUrl } from 'class-validator';
 
 export class UpdateOrganizerDto {
   @ApiPropertyOptional({ example: 'FPT Event Club Updated' })
@@ -28,14 +22,19 @@ export class UpdateOrganizerDto {
   @IsUrl()
   logoUrl?: string;
 
-  @ApiPropertyOptional({ example: 2, description: 'ID of the user who owns this organizer' })
+  @ApiPropertyOptional({
+    example: 2,
+    description: 'ID of the user who owns this organizer',
+  })
   @IsOptional()
   @IsInt()
   ownerId?: number;
 
-  @ApiPropertyOptional({ example: 2, description: 'ID of the campus this organizer belongs to' })
+  @ApiPropertyOptional({
+    example: 2,
+    description: 'ID of the campus this organizer belongs to',
+  })
   @IsOptional()
   @IsInt()
   campusId?: number;
 }
-

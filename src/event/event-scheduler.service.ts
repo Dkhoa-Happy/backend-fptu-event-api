@@ -39,11 +39,7 @@ export class EventSchedulerService {
         );
       }
     } catch (error) {
-      this.logger.error(
-        'Lỗi khi tự động cập nhật trạng thái sự kiện:',
-        error,
-      );
+      this.logger.error('Lỗi khi tự động cập nhật trạng thái sự kiện:', error);
     }
   }
 }
-

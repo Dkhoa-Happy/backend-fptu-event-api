@@ -5,4 +5,3 @@ export * from './query-my-ticket.dto';
 export * from './scan-ticket.dto';
 export * from './manual-checkin.dto';
 export * from './query-event-attendees.dto';
-

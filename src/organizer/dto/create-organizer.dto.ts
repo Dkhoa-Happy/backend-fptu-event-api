@@ -1,18 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsInt,
-  IsOptional,
-  IsString,
-  IsUrl,
-} from 'class-validator';
+import { IsEmail, IsInt, IsOptional, IsString, IsUrl } from 'class-validator';
 
 export class CreateOrganizerDto {
   @ApiProperty({ example: 'FPT Event Club' })
   @IsString()
   name: string;
 
-  @ApiPropertyOptional({ example: 'Official event organizing club of FPT University' })
+  @ApiPropertyOptional({
+    example: 'Official event organizing club of FPT University',
+  })
   @IsOptional()
   @IsString()
   description?: string;
@@ -25,12 +21,17 @@ export class CreateOrganizerDto {
   @IsUrl()
   logoUrl: string;
 
-  @ApiProperty({ example: 1, description: 'ID of the user who owns this organizer' })
+  @ApiProperty({
+    example: 1,
+    description: 'ID of the user who owns this organizer',
+  })
   @IsInt()
   ownerId: number;
 
-  @ApiProperty({ example: 1, description: 'ID of the campus this organizer belongs to' })
+  @ApiProperty({
+    example: 1,
+    description: 'ID of the campus this organizer belongs to',
+  })
   @IsInt()
   campusId: number;
 }
-

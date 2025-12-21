@@ -15,4 +15,3 @@ export class QueryEventStatsDto {
   @IsOptional()
   year?: number;
 }
-

@@ -93,7 +93,8 @@ export class NotificationController {
   )
   @ApiOperation({
     summary: 'Get unread notification count for current user',
-    description: 'Returns the count of unread notifications for the current user',
+    description:
+      'Returns the count of unread notifications for the current user',
   })
   @ApiResponse({
     status: 200,

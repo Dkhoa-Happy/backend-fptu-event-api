@@ -241,7 +241,9 @@ export class SpeakerService {
     });
 
     if (!speaker) {
-      throw new NotFoundException(`Không tìm thấy speaker với ID ${dto.speakerId}`);
+      throw new NotFoundException(
+        `Không tìm thấy speaker với ID ${dto.speakerId}`,
+      );
     }
 
     // Check if speaker is already assigned to this event

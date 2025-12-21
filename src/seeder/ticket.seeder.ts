@@ -29,7 +29,9 @@ export class TicketSeeder implements Seeder {
     });
 
     if (!targetEvent?.venueId) {
-      console.warn('No event with a venue found (or student already has tickets), skip TicketSeeder');
+      console.warn(
+        'No event with a venue found (or student already has tickets), skip TicketSeeder',
+      );
       return;
     }
 
@@ -46,7 +48,9 @@ export class TicketSeeder implements Seeder {
       });
 
       if (existingTicketForEvent) {
-        console.warn(`Student already has a ticket for event ${targetEvent.id}, skip TicketSeeder`);
+        console.warn(
+          `Student already has a ticket for event ${targetEvent.id}, skip TicketSeeder`,
+        );
         return;
       }
 
@@ -95,9 +99,15 @@ export class TicketSeeder implements Seeder {
       });
 
       // Increment registeredCount if this is a new ticket or event changed
-      if (!existingTicketByQr || existingTicketByQr.eventId !== targetEvent.id) {
+      if (
+        !existingTicketByQr ||
+        existingTicketByQr.eventId !== targetEvent.id
+      ) {
         // If ticket existed with different event, decrement old event first
-        if (existingTicketByQr && existingTicketByQr.eventId !== targetEvent.id) {
+        if (
+          existingTicketByQr &&
+          existingTicketByQr.eventId !== targetEvent.id
+        ) {
           await tx.event.update({
             where: { id: existingTicketByQr.eventId },
             data: {
