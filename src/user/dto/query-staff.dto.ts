@@ -42,4 +42,3 @@ export class QueryStaffDto {
   @IsInt()
   campusId?: number;
 }
-

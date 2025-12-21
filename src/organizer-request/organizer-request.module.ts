@@ -11,4 +11,3 @@ import { NotificationModule } from '../notification/notification.module';
   providers: [OrganizerRequestService],
 })
 export class OrganizerRequestModule {}
-

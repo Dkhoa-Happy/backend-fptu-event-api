@@ -74,5 +74,3 @@ export class CreateUserDto {
   @IsString()
   avatar?: string;
 }
-
-

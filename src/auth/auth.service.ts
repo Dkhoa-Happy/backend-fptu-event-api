@@ -417,14 +417,9 @@ export class AuthService {
     }
 
     // Kiểm tra mật khẩu mới khác mật khẩu cũ
-    const isSamePassword = await argon2.verify(
-      user.passwordHash,
-      newPassword,
-    );
+    const isSamePassword = await argon2.verify(user.passwordHash, newPassword);
     if (isSamePassword) {
-      throw new BadRequestException(
-        'Mật khẩu mới phải khác mật khẩu hiện tại',
-      );
+      throw new BadRequestException('Mật khẩu mới phải khác mật khẩu hiện tại');
     }
 
     // Cập nhật mật khẩu mới
@@ -494,7 +489,8 @@ export class AuthService {
     });
 
     // Gửi email với OTP
-    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.userName;
+    const fullName =
+      `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.userName;
     await this.emailService.sendPasswordResetOtp({
       email: user.email,
       fullName,
@@ -534,11 +530,15 @@ export class AuthService {
 
     // Kiểm tra OTP có tồn tại và chưa hết hạn
     if (!user.passwordResetOtp || !user.passwordResetOtpExpires) {
-      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu OTP mới.');
+      throw new BadRequestException(
+        'OTP không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu OTP mới.',
+      );
     }
 
     if (user.passwordResetOtpExpires < new Date()) {
-      throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu OTP mới.');
+      throw new BadRequestException(
+        'OTP đã hết hạn. Vui lòng yêu cầu OTP mới.',
+      );
     }
 
     // Verify OTP
@@ -584,11 +584,15 @@ export class AuthService {
 
     // Kiểm tra OTP có tồn tại và chưa hết hạn
     if (!user.passwordResetOtp || !user.passwordResetOtpExpires) {
-      throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu OTP mới.');
+      throw new BadRequestException(
+        'OTP không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu OTP mới.',
+      );
     }
 
     if (user.passwordResetOtpExpires < new Date()) {
-      throw new BadRequestException('OTP đã hết hạn. Vui lòng yêu cầu OTP mới.');
+      throw new BadRequestException(
+        'OTP đã hết hạn. Vui lòng yêu cầu OTP mới.',
+      );
     }
 
     // Verify OTP
@@ -613,7 +617,8 @@ export class AuthService {
     });
 
     return {
-      message: 'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới.',
+      message:
+        'Đặt lại mật khẩu thành công. Bạn có thể đăng nhập với mật khẩu mới.',
     };
   }
 }

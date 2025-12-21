@@ -530,7 +530,9 @@ export class EmailService {
         <h2 style="color: #1976d2;">Tài khoản được nâng quyền</h2>
         <p>Xin chào ${fullName || 'bạn'},</p>
         <p>Tài khoản của bạn trên hệ thống <strong>FPT Event System</strong> đã được nâng quyền thành <strong>Staff</strong>${
-          organizerName ? ` cho CLB/Organizer <strong>${organizerName}</strong>` : ''
+          organizerName
+            ? ` cho CLB/Organizer <strong>${organizerName}</strong>`
+            : ''
         }.</p>
         <p>Bạn có thể đăng nhập và sử dụng các chức năng dành cho Staff trên hệ thống.</p>
         <p>Nếu bạn không mong đợi thay đổi này, vui lòng liên hệ bộ phận hỗ trợ.</p>

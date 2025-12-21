@@ -22,4 +22,3 @@ export class ApproveCancellationDto {
   @IsOptional()
   adminNote?: string;
 }
-

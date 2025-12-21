@@ -44,5 +44,3 @@ export class CheckinGateway {
     return `event:${eventId}:checkin`;
   }
 }
-
-

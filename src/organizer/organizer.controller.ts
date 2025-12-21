@@ -33,8 +33,7 @@ export class OrganizerController {
   @Post()
   @Roles(UserRole.admin, UserRole.event_organizer)
   @ApiOperation({
-    summary:
-      'Create a new organizer - Required roles: admin, event_organizer',
+    summary: 'Create a new organizer - Required roles: admin, event_organizer',
   })
   @ApiResponse({
     status: 201,
@@ -68,14 +67,18 @@ export class OrganizerController {
   @ApiForbiddenResponse({
     description: 'Forbidden. Required roles: admin, staff, event_organizer',
   })
-  async findAll(@GetUser('id') userId: number, @GetUser('roleName') role: UserRole) {
+  async findAll(
+    @GetUser('id') userId: number,
+    @GetUser('roleName') role: UserRole,
+  ) {
     return this.organizerService.findAllForRole(userId, role);
   }
 
   @Get(':id')
   @Roles(UserRole.admin, UserRole.staff, UserRole.event_organizer)
   @ApiOperation({
-    summary: 'Get organizer by ID - Required roles: admin, staff, event_organizer',
+    summary:
+      'Get organizer by ID - Required roles: admin, staff, event_organizer',
   })
   @ApiResponse({
     status: 200,
@@ -145,4 +148,3 @@ export class OrganizerController {
     return this.organizerService.remove(id);
   }
 }
-

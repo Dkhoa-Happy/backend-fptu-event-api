@@ -9,4 +9,3 @@ import { CheckinGateway } from '../realtime/checkin.gateway';
   exports: [TicketService],
 })
 export class TicketModule {}
-

@@ -5,7 +5,8 @@ import { IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 export class ManualCheckinDto {
   @ApiProperty({
     example: '550e8400-e29b-41d4-a716-446655440000',
-    description: 'Ticket ID to check-in (optional if studentCode and eventId are provided)',
+    description:
+      'Ticket ID to check-in (optional if studentCode and eventId are provided)',
     required: false,
   })
   @IsOptional()
@@ -14,7 +15,8 @@ export class ManualCheckinDto {
 
   @ApiProperty({
     example: 'SE123456',
-    description: 'Student code to check-in (required if ticketId is not provided)',
+    description:
+      'Student code to check-in (required if ticketId is not provided)',
     required: false,
   })
   @IsOptional()
@@ -39,4 +41,3 @@ export class ManualCheckinDto {
   @IsNotEmpty()
   staffId: number;
 }
-

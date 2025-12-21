@@ -67,4 +67,3 @@ export class SubmitOrganizerRequestDto {
   @IsEmail({}, { each: true })
   memberEmails?: string[];
 }
-

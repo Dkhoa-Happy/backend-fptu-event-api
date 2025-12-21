@@ -52,5 +52,3 @@ export class QueryUserDto {
   @IsInt()
   campusId?: number;
 }
-
-

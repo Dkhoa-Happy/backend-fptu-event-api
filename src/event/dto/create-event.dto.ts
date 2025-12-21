@@ -68,7 +68,9 @@ export class CreateEventDto {
     description: 'Event start time (ISO 8601 format)',
   })
   @IsDateString()
-  @IsFutureDate({ message: 'Thời gian bắt đầu sự kiện không được là ngày quá khứ' })
+  @IsFutureDate({
+    message: 'Thời gian bắt đầu sự kiện không được là ngày quá khứ',
+  })
   startTime: string;
 
   @ApiProperty({
@@ -76,7 +78,9 @@ export class CreateEventDto {
     description: 'Event end time (ISO 8601 format)',
   })
   @IsDateString()
-  @IsFutureDate({ message: 'Thời gian kết thúc sự kiện không được là ngày quá khứ' })
+  @IsFutureDate({
+    message: 'Thời gian kết thúc sự kiện không được là ngày quá khứ',
+  })
   endTime: string;
 
   @ApiPropertyOptional({
@@ -86,7 +90,9 @@ export class CreateEventDto {
   })
   @IsOptional()
   @IsDateString()
-  @IsFutureDate({ message: 'Thời gian bắt đầu đăng ký không được là ngày quá khứ' })
+  @IsFutureDate({
+    message: 'Thời gian bắt đầu đăng ký không được là ngày quá khứ',
+  })
   startTimeRegister?: string;
 
   @ApiPropertyOptional({
@@ -96,7 +102,9 @@ export class CreateEventDto {
   })
   @IsOptional()
   @IsDateString()
-  @IsFutureDate({ message: 'Thời gian kết thúc đăng ký không được là ngày quá khứ' })
+  @IsFutureDate({
+    message: 'Thời gian kết thúc đăng ký không được là ngày quá khứ',
+  })
   endTimeRegister?: string;
 
   @ApiPropertyOptional({
@@ -158,7 +166,8 @@ export class CreateEventDto {
 
   @ApiPropertyOptional({
     type: [CreateEventSpeakerDto],
-    description: 'Danh sách speaker (speakerId + topic) gán cho sự kiện khi tạo',
+    description:
+      'Danh sách speaker (speakerId + topic) gán cho sự kiện khi tạo',
     required: false,
   })
   @IsOptional()

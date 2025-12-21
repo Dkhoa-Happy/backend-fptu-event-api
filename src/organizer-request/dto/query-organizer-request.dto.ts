@@ -24,4 +24,3 @@ export class QueryOrganizerRequestDto {
   @IsEnum(OrganizerRequestStatus)
   status?: OrganizerRequestStatus;
 }
-

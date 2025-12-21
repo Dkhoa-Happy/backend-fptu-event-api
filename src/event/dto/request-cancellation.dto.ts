@@ -12,4 +12,3 @@ export class RequestCancellationDto {
   @MinLength(10, { message: 'Lý do hủy sự kiện phải có ít nhất 10 ký tự' })
   reason: string;
 }
-

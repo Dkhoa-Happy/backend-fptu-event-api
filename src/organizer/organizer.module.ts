@@ -8,4 +8,3 @@ import { OrganizerService } from './organizer.service';
   exports: [OrganizerService],
 })
 export class OrganizerModule {}
-

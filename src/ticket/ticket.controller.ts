@@ -197,7 +197,8 @@ export class TicketController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request (e.g., missing required fields, ticket already used/cancelled/expired)',
+    description:
+      'Bad request (e.g., missing required fields, ticket already used/cancelled/expired)',
   })
   @ApiResponse({
     status: 404,
@@ -257,8 +258,7 @@ export class TicketController {
   @Post(':id/cancel')
   @Roles(UserRole.student)
   @ApiOperation({
-    summary:
-      'Cancel ticket - Required roles: student',
+    summary: 'Cancel ticket - Required roles: student',
     description:
       'Cancel a ticket. Only allowed if the event starts more than 1 day from now. The seat will be freed and event registeredCount will be decremented.',
   })
@@ -272,15 +272,13 @@ export class TicketController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request (e.g., cannot cancel, ticket already cancelled/used)',
+    description:
+      'Bad request (e.g., cannot cancel, ticket already cancelled/used)',
   })
   @ApiForbiddenResponse({
     description: 'Forbidden. Required roles: student',
   })
-  async cancel(
-    @Param('id') id: string,
-    @GetUser('id') userId: number,
-  ) {
+  async cancel(@Param('id') id: string, @GetUser('id') userId: number) {
     return this.ticketService.cancel(id, userId);
   }
 

@@ -38,8 +38,7 @@ export class OrganizerRequestController {
   @Post()
   @Roles(UserRole.student)
   @ApiOperation({
-    summary:
-      'Student gửi yêu cầu trở thành organizer kèm minh chứng',
+    summary: 'Student gửi yêu cầu trở thành organizer kèm minh chứng',
   })
   @ApiForbiddenResponse({
     description: 'Chỉ student được phép gửi yêu cầu',
@@ -78,4 +77,3 @@ export class OrganizerRequestController {
     return this.organizerRequestService.review(id, adminId, dto);
   }
 }
-

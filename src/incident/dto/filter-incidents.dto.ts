@@ -38,4 +38,3 @@ export class FilterIncidentsDto {
   @Type(() => Number)
   reporterId?: number;
 }
-

@@ -323,7 +323,7 @@ export class OrganizerRequestService {
 
           // Đảm bảo username là unique, nếu trùng thì thêm số đuôi
           let counter = 1;
-          // eslint-disable-next-line no-constant-condition
+
           while (true) {
             const conflict = await tx.user.findUnique({
               where: { userName },

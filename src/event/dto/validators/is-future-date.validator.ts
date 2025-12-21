@@ -15,7 +15,7 @@ export class IsFutureDateConstraint implements ValidatorConstraintInterface {
 
     const date = new Date(value);
     const now = new Date();
-    
+
     // Set now to start of day for comparison (only compare dates, not time)
     now.setHours(0, 0, 0, 0);
     date.setHours(0, 0, 0, 0);
@@ -29,7 +29,7 @@ export class IsFutureDateConstraint implements ValidatorConstraintInterface {
 }
 
 export function IsFutureDate(validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       target: object.constructor,
       propertyName: propertyName,
@@ -39,4 +39,3 @@ export function IsFutureDate(validationOptions?: ValidationOptions) {
     });
   };
 }
-
