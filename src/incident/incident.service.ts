@@ -354,6 +354,14 @@ export class IncidentService {
           title: true,
           startTime: true,
           endTime: true,
+          venue: {
+            select: {
+              id: true,
+              name: true,
+              location: true,
+              hasSeats: true,
+            },
+          },
           organizer: {
             select: {
               ownerId: true,
